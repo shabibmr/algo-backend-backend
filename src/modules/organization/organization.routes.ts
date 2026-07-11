@@ -54,6 +54,7 @@ router.put(
 
 // ── Branch ───────────────────────────────────────────────────
 router.get('/branches', authorize('Branch', 'read'), OrganizationController.listBranches);
+router.get('/branches/:id', authorize('Branch', 'read'), OrganizationController.getBranch);
 router.post(
   '/branches',
   authorize('Branch', 'create'),
@@ -70,6 +71,7 @@ router.delete('/branches/:id', authorize('Branch', 'delete'), OrganizationContro
 
 // ── Currency ─────────────────────────────────────────────────
 router.get('/currencies', authorize('Currency', 'read'), OrganizationController.listCurrencies);
+router.get('/currencies/:id', authorize('Currency', 'read'), OrganizationController.getCurrency);
 router.post(
   '/currencies',
   authorize('Currency', 'create'),

@@ -130,6 +130,12 @@ export const OrganizationService = {
     });
   },
 
+  async getBranch(id: number) {
+    const branch = await branchRepo.findById(id);
+    if (!branch) throw new NotFoundError('Branch not found');
+    return branch;
+  },
+
   async createBranch(data: any, user?: string) {
     const existing = await branchRepo.findFirst({
       where: { branch_code: data.branch_code },
@@ -166,6 +172,12 @@ export const OrganizationService = {
       orderBy: { iso_code: 'asc' },
       limit: 1000,
     });
+  },
+
+  async getCurrency(id: number) {
+    const currency = await currencyRepo.findById(id);
+    if (!currency) throw new NotFoundError('Currency not found');
+    return currency;
   },
 
   async createCurrency(data: any, user?: string) {

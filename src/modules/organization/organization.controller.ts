@@ -124,6 +124,15 @@ export const OrganizationController = {
     }
   },
 
+  async getBranch(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await OrganizationService.getBranch(Number(req.params.id));
+      return res.status(200).json({ success: true, data, requestId: req.requestId });
+    } catch (err) {
+      return next(err);
+    }
+  },
+
   async createBranch(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user?.username;
@@ -167,6 +176,15 @@ export const OrganizationController = {
         requestId: req.requestId,
       };
       return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
+  async getCurrency(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await OrganizationService.getCurrency(Number(req.params.id));
+      return res.status(200).json({ success: true, data, requestId: req.requestId });
     } catch (err) {
       return next(err);
     }
