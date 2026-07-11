@@ -2,7 +2,7 @@
 
 **Status:** Draft | **Date:** 2026-06-14  
 **Target Module:** `src/modules/organization`  
-**Reference Standards:** [CODE_GUIDE.md](file:///E:/work/algo-backend/models/backend/CODE_GUIDE.md) & [IMPLEMENTATION_PLAN.md](file:///E:/work/algo-backend/models/backend/IMPLEMENTATION_PLAN.md)
+**Reference Standards:** [CODE_GUIDE.md](file:///E:/work/algo-backend/models/backend/docs/CODE_GUIDE.md) & [IMPLEMENTATION_PLAN.md](file:///E:/work/algo-backend/models/backend/docs/IMPLEMENTATION_PLAN.md)
 
 ---
 
