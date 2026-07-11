@@ -28,7 +28,7 @@ export const ReportsExportController = {
         { header: 'Voucher Prefix', key: 'voucher_prefix', width: 15 },
         { header: 'Voucher No', key: 'voucher_no', width: 15 },
         { header: 'Customer Ledger ID', key: 'ledger_id', width: 20 },
-        { header: 'Sub Total', key: 'sub_total', width: 15 },
+        { header: 'Gross Total', key: 'gross_total', width: 15 },
         { header: 'VAT Amount', key: 'vat_amount', width: 15 },
         { header: 'Total Amount', key: 'total', width: 18 },
         { header: 'Status', key: 'status', width: 15 },
@@ -39,10 +39,10 @@ export const ReportsExportController = {
         voucher_prefix: item.voucher_prefix || '',
         voucher_no: item.voucher_no || '',
         ledger_id: item.sales_invoice_main?.voucher_ledger_id || '',
-        sub_total: Number(item.sales_invoice_main?.sub_total || 0),
-        vat_amount: Number(item.sales_invoice_main?.vat_amount || 0),
-        total: Number(item.sales_invoice_main?.total || 0),
-        status: item.sales_invoice_main?.voucher_status || '',
+        gross_total: Number(item.sales_invoice_main?.Gross_Total || 0),
+        vat_amount: Number(item.sales_invoice_main?.Vat_Amount || 0),
+        total: Number(item.sales_invoice_main?.Total || 0),
+        status: item.sales_invoice_main?.VoucherStatus || '',
       }));
 
       const buffer = await ExportService.generateExcel('Sales Register', columns, data);
@@ -73,7 +73,7 @@ export const ReportsExportController = {
         { header: 'Voucher Prefix', key: 'voucher_prefix', width: 15 },
         { header: 'Voucher No', key: 'voucher_no', width: 15 },
         { header: 'Vendor Ledger ID', key: 'ledger_id', width: 20 },
-        { header: 'Sub Total', key: 'sub_total', width: 15 },
+        { header: 'Gross Total', key: 'gross_total', width: 15 },
         { header: 'VAT Amount', key: 'vat_amount', width: 15 },
         { header: 'Total Amount', key: 'total', width: 18 },
         { header: 'Status', key: 'status', width: 15 },
@@ -84,10 +84,10 @@ export const ReportsExportController = {
         voucher_prefix: item.voucher_prefix || '',
         voucher_no: item.voucher_no || '',
         ledger_id: item.purchase_invoice_main?.voucher_ledger_id || '',
-        sub_total: Number(item.purchase_invoice_main?.sub_total || 0),
-        vat_amount: Number(item.purchase_invoice_main?.vat_amount || 0),
-        total: Number(item.purchase_invoice_main?.total || 0),
-        status: item.purchase_invoice_main?.voucher_status || '',
+        gross_total: Number(item.purchase_invoice_main?.Gross_Total || 0),
+        vat_amount: Number(item.purchase_invoice_main?.Vat_Amount || 0),
+        total: Number(item.purchase_invoice_main?.Total || 0),
+        status: item.purchase_invoice_main?.VoucherStatus || '',
       }));
 
       const buffer = await ExportService.generateExcel('Purchase Register', columns, data);

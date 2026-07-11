@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../../core/middleware/authenticate';
 import { authorize } from '../../core/middleware/authorize';
 import { VoucherReadController } from './voucherRead.controller';
+import { VoucherExportController } from './voucherExport.controller';
 
 const router = Router();
 router.use(authenticate);
@@ -17,6 +18,16 @@ router.get(
   '/sales-invoices/:id',
   authorize('SalesInvoice', 'read'),
   VoucherReadController.getSalesInvoice,
+);
+router.get(
+  '/sales-invoices/:id/pdf',
+  authorize('SalesInvoice', 'read'),
+  VoucherExportController.printSalesInvoice,
+);
+router.post(
+  '/sales-invoices/:id/share',
+  authorize('SalesInvoice', 'read'),
+  VoucherExportController.shareSalesInvoice,
 );
 
 router.get(
