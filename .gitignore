@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.claude/scratch/
+src/scratch_*.ts
+scripts/scratch_*.ts

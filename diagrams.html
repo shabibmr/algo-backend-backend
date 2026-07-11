@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>algoERP — Entity Relationship Diagrams</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #222; }
+
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      background: #1e293b; color: #fff;
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 24px; flex-wrap: wrap;
+    }
+    nav span { font-weight: 700; font-size: 1rem; margin-right: 8px; }
+    nav a {
+      color: #94a3b8; text-decoration: none; font-size: 0.85rem;
+      padding: 4px 10px; border-radius: 4px; white-space: nowrap;
+    }
+    nav a:hover { background: #334155; color: #fff; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+    section { margin-bottom: 56px; }
+    h2 {
+      font-size: 1.2rem; font-weight: 700; color: #1e293b;
+      border-left: 4px solid #3b82f6; padding-left: 12px;
+      margin-bottom: 20px;
+    }
+    p.note {
+      font-size: 0.82rem; color: #64748b; margin-bottom: 14px;
+      background: #e2e8f0; border-radius: 6px; padding: 8px 12px;
+    }
+
+    .diagram-box {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.1);
+      padding: 24px; overflow-x: auto;
+    }
+    .diagram-box .mermaid { min-width: 600px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span>algoERP ERD</span>
+  <a href="#org">Organization</a>
+  <a href="#accounts">Accounts</a>
+  <a href="#inventory">Inventory</a>
+  <a href="#employee">Employee</a>
+  <a href="#transactions">Transactions</a>
+  <a href="#softfk">Soft FKs</a>
+</nav>
+
+<main>
+
+  <section id="org">
+    <h2>1 · Organization &amp; System</h2>
+    <div class="diagram-box">
+      <div class="mermaid">
+erDiagram
+    CompanyProfile   ||--o{ FinancialYear    : "has"
+    CompanyProfile   ||--o{ Branch           : "has"
+    CompanyProfile   ||--o{ VoucherSeries    : "defines"
+    FinancialYear    ||--o{ CurrencyRate     : "scopes"
+    FinancialYear    ||--o{ VoucherSeries    : "scopes"
+    Branch           ||--o{ VoucherSeries    : "scopes"
+    Branch           ||--o{ UserCredentials  : "assigned"
+    Currency         ||--o{ CurrencyRate     : "rates"
+    UserRole         ||--o{ UserAccessPermission : "grants"
+    UserRole         ||--o{ UserCredentials  : "assigned to"
+    AddressBook      ||--|| UserCredentials  : "1:1 contact"
+    UserCredentials  ||--o{ AuditLog         : "acts"
+    ProjectMaster    ||--o{ ProjectMaster    : "parent/child"
+    AddressBook      ||--o{ ProjectMaster    : "owner contact"
+
+    CompanyProfile { int id PK; string company_name; string currency }
+    FinancialYear  { int id PK; string fy_code; string status; bool is_default }
+    Branch         { int id PK; string branch_code; bool is_head_office }
+    Currency       { int id PK; string iso_code; bool is_base_currency }
+    CurrencyRate   { int id PK; date rate_date; decimal buy_rate; decimal sell_rate }
+    VoucherSeries  { int id PK; string voucher_type; string prefix; int number_length }
+    UserRole       { int id PK; string role_name; bool is_system }
+    UserCredentials { int id PK; string username; string password_hash }
+    UserAccessPermission { int id PK; string module_name; bool allow_create; bool allow_read; bool allow_update; bool allow_delete }
+    AddressBook    { int id PK; string contact_type; string name; string email }
+    ProjectMaster  { int id PK; string project_code; string project_status }
+    AuditLog       { int id PK; string action; string table_name; string record_id }
+    ConfigSetting  { int id PK; string gm_key; string gm_value; string data_type }
+    ExtraValuesTable { int id PK; string type; string object_id; json data }
+      </div>
+    </div>
+  </section>
+
+  <section id="accounts">
+    <h2>2 · Accounts</h2>
+    <div class="diagram-box">
+      <div class="mermaid">
+erDiagram
+    AccountGroup ||--o{ AccountGroup        : "parent/child"
+    AccountGroup ||--o{ LedgerMaster        : "classifies"
+    LedgerMaster ||--o{ LedgerMaster        : "sub-ledger"
+    LedgerMaster ||--|| LedgerBankDetails   : "1:1"
+    LedgerMaster ||--|| LedgerCreditSettings : "1:1"
+    LedgerMaster ||--|| LedgerTaxSettings   : "1:1"
+
+    AccountGroup { int id PK; string group_name; string nature; string group_behavior; bool is_system_defined }
+    LedgerMaster { int id PK; string ledger_code; string ledger_name; string ledger_type; decimal opening_balance; bool is_system_defined }
+    LedgerBankDetails    { int ledger_id PK; string bank_account_number; string iban; string swift_code }
+    LedgerCreditSettings { int ledger_id PK; int credit_period_days; decimal credit_limit }
+    LedgerTaxSettings    { int ledger_id PK; string trn; string type_of_supply }
+    BillwiseRecord  { int id PK; string ref_type; decimal debit_amount; decimal credit_amount; date due_date }
+    ChequeDetails   { int id PK; string instrument_type; string instrument_no; bool is_cleared }
+      </div>
+    </div>
+  </section>
+
+  <section id="inventory">
+    <h2>3 · Inventory</h2>
+    <div class="diagram-box">
+      <div class="mermaid">
+erDiagram
+    InventoryGroup ||--o{ InventoryGroup : "parent/child"
+    InventoryGroup ||--o{ InventoryItem  : "groups"
+    Brand          ||--o{ InventoryItem  : "brands"
+    Category       ||--o{ InventoryItem  : "categorizes"
+    UOM            ||--o{ InventoryItem  : "measures"
+    TaxCategories  ||--o{ InventoryItem  : "default tax"
+    InventoryItem  ||--o{ SKUMaster      : "variants"
+    InventoryItem  ||--o{ ItemBatch      : "batches"
+    InventoryItem  ||--o{ ItemProperty   : "properties"
+    InventoryItem  ||--o{ Ingredient     : "finished BOM"
+    InventoryItem  ||--o{ Ingredient     : "raw material BOM"
+    InventoryItem  ||--o{ StockLedger    : "moves"
+    SKUMaster      ||--o{ StockLedger    : "variant moves"
+    ItemBatch      ||--o{ StockLedger    : "batch moves"
+    Godown         ||--o{ StockLedger    : "location"
+    PriceList      ||--o{ PriceListEntry : "entries"
+    RouteMaster    ||--o{ RouteCustomerMapping : "customers"
+    RouteMaster    ||--o{ RouteMapping         : "salesperson schedule"
+
+    InventoryItem  { int id PK; string item_code; string item_name; bool is_batch_tracked; bool is_service }
+    InventoryGroup { int id PK; string group_code }
+    SKUMaster      { int id PK; string sku_code; string barcode; int sku_type }
+    ItemBatch      { int id PK; string batch_number; date expiration_date; decimal cost_price }
+    Godown         { int id PK; string godown_code; bool is_default }
+    StockLedger    { int id PK; decimal quantity_in; decimal quantity_out; decimal unit_cost; date posting_date }
+    TaxCategories  { int id PK; string tax_name; decimal tax_rate }
+    PriceList      { int id PK; string price_list_name; bool is_default }
+    PriceListEntry { int id PK; string item_id; decimal price; int mrp2_std1_cus0 }
+    RouteMaster    { int id PK; string route_id; string route_name }
+    UOM            { int id PK; string uom_name; string uom_code }
+    Brand          { int id PK; string brand_name }
+    Category       { int id PK; string category_name }
+    Ingredient     { int id PK; decimal sales_item_qty; decimal purchase_item_qty }
+    ItemProperty   { int id PK; string property_id; string default_value }
+      </div>
+    </div>
+  </section>
+
+  <section id="employee">
+    <h2>4 · Employee (HR)</h2>
+    <div class="diagram-box">
+      <div class="mermaid">
+erDiagram
+    Department     ||--o{ Department     : "parent/child"
+    Department     ||--o{ Designation    : "has"
+    Designation    ||--o{ EmployeeDetails : "titled"
+    Department     ||--o{ EmployeeDetails : "belongs"
+    AddressBook    ||--|| EmployeeDetails : "1:1 contact"
+    EmployeeDetails ||--|| EmployeeBankDetails   : "1:1"
+    EmployeeDetails ||--|| EmployeeSalaryDetails : "1:1"
+    EmployeeDetails ||--o{ EmployeeDocument      : "documents"
+    EmployeeDetails ||--o{ SalaryRevisionHistory : "revisions"
+    EmployeeDetails ||--o{ LeaveAllocation       : "allocations"
+    EmployeeDetails ||--o{ LeaveRequest          : "requests"
+    EmployeeDetails ||--o{ AttendanceDetails     : "attendance"
+    EmployeeDetails ||--o{ EmployeeShiftAssignment : "shifts"
+    LeavePolicy    ||--o{ LeaveAllocation  : "governs"
+    LeavePolicy    ||--o{ LeaveRequest     : "type"
+    LeaveRequest   ||--o{ AttendanceDetails : "links leave"
+    ShiftMaster    ||--o{ EmployeeShiftAssignment : "assigned"
+
+    EmployeeDetails { int id PK; string employee_code; string gender; string marital_status }
+    Department      { int id PK; string dept_code; string dept_name }
+    Designation     { int id PK; string designation_code }
+    EmployeeSalaryDetails { int employee_id PK; decimal basic_salary; decimal hra }
+    EmployeeBankDetails   { int employee_id PK; string account_number; string account_type }
+    EmployeeDocument      { int id PK; string doc_type; date expiry_date }
+    LeavePolicy     { int id PK; string leave_type; bool is_paid }
+    LeaveAllocation { int id PK; decimal allocated_days; decimal used_days }
+    LeaveRequest    { int id PK; date from_date; date to_date; string status }
+    AttendanceDetails { int id PK; date working_date; string status }
+    ShiftMaster     { int id PK; string shift_code; bool is_night_shift }
+    SalaryRevisionHistory { int id PK; date revision_date; decimal basic_salary_after }
+    EmployeeShiftAssignment { int id PK; date valid_from; date valid_to }
+      </div>
+    </div>
+  </section>
+
+  <section id="transactions">
+    <h2>5 · Transactions (Vouchers)</h2>
+    <p class="note">
+      The SalesInvoiceMain/SalesInvoiceDetail pair shown below represents the pattern
+      used by all voucher types (Quotation, SalesOrder, PurchaseInvoice, Payment, Receipt,
+      GodownTransfer, Journal, …). Ledger-based types (Payment/Receipt/Journal) use
+      ledger+amount lines instead of item lines.
+    </p>
+    <div class="diagram-box">
+      <div class="mermaid">
+erDiagram
+    VoucherHeader    ||--|| SalesInvoiceMain   : "1:1 (per type)"
+    VoucherHeader    ||--o{ SalesInvoiceDetail : "item lines"
+    VoucherHeader    ||--o{ JournalLedger      : "GL postings"
+    VoucherHeader    ||--o{ StockLedger        : "stock postings"
+    VoucherHeader    ||--|| Shipment           : "1:1 logistics"
+    VoucherHeader    ||--o{ VoucherLinkage     : "source links"
+    VoucherHeader    ||--o{ VoucherLinkage     : "target links"
+    LedgerMaster     ||--o{ JournalLedger      : "posted to"
+    TransactionHelper ||--o{ VoucherHeader     : "numbers"
+
+    VoucherHeader    { int id PK; string voucher_type; string voucher_prefix; string voucher_no; date voucher_date }
+    TransactionHelper { int id PK; string voucher_type; string voucher_prefix; string financial_year; int last_number; bool reset_yearly }
+    SalesInvoiceMain { int voucher_header_id PK; string voucher_status; decimal total; decimal vat_amount }
+    SalesInvoiceDetail { int id PK; decimal quantity; decimal price; decimal tax_amount }
+    JournalLedger    { int id PK; decimal debit_amount; decimal credit_amount; date posting_date }
+    VoucherLinkage   { int id PK; string link_type }
+    VoucherLineAllocation { int id PK; string allocation_type; string allocation_method; decimal allocated_amount }
+    VoucherLineRelation { int id PK; string source_voucher_type; string target_voucher_type; decimal quantity_converted }
+    Shipment         { int id PK; string carrier_name; string lr_no }
+      </div>
+    </div>
+  </section>
+
+  <section id="softfk">
+    <h2>6 · Cross-Module Soft FKs (application-enforced, no DB constraint)</h2>
+    <p class="note">
+      These integer references cross module boundaries without a database foreign-key
+      constraint. Referential integrity is validated by the application on every write.
+    </p>
+    <div class="diagram-box">
+      <div class="mermaid">
+erDiagram
+    LedgerMaster          }o--|| AddressBook     : "contact_id"
+    LedgerTaxSettings     }o--|| TaxCategories   : "tax_category_id"
+    ProjectMaster         }o--|| LedgerMaster    : "associated_ledger_id"
+    ProjectMaster         }o--|| Godown          : "godown_id"
+    ProjectMaster         }o--|| EmployeeDetails : "coordinator_employee_id"
+    BillwiseRecord        }o--|| EmployeeDetails : "salesman_id"
+    ChequeDetails         }o--|| LedgerMaster    : "our_bank_id"
+    InventoryGroup        }o--|| LedgerMaster    : "default sales/purchase ledger"
+    InventoryItem         }o--|| LedgerMaster    : "GL ledger ids"
+    InventoryItem         }o--|| TaxCategories   : "default_tax_category"
+    LedgerItemMapping     }o--|| LedgerMaster    : "ledger_id"
+    LedgerItemMapping     }o--|| InventoryItem   : "item_id"
+    RouteCustomerMapping  }o--|| LedgerMaster    : "customer_ledger_id"
+    RouteMapping          }o--|| EmployeeDetails : "salesperson_employee_id"
+    EmployeeSalaryDetails }o--|| LedgerMaster    : "salary ledger ids"
+    SalesInvoiceMain      }o--|| AddressBook     : "billing/shipping contact"
+    SalesInvoiceMain      }o--|| EmployeeDetails : "salesperson"
+    SalesInvoiceMain      }o--|| ProjectMaster   : "project"
+    VoucherLineAllocation }o--|| LedgerMaster    : "ledger_id"
+
+    LedgerMaster    { int id PK; string ledger_name }
+    AddressBook     { int id PK; string name }
+    TaxCategories   { int id PK; string tax_name }
+    ProjectMaster   { int id PK; string project_code }
+    Godown          { int id PK; string godown_name }
+    EmployeeDetails { int id PK; string employee_code }
+    InventoryItem   { int id PK; string item_name }
+    InventoryGroup  { int id PK; string group_name }
+    LedgerItemMapping     { int id PK }
+    RouteCustomerMapping  { int id PK }
+    RouteMapping          { int id PK }
+    EmployeeSalaryDetails { int employee_id PK }
+    SalesInvoiceMain      { int voucher_header_id PK }
+    LedgerTaxSettings     { int ledger_id PK }
+    BillwiseRecord        { int id PK }
+    ChequeDetails         { int id PK }
+    VoucherLineAllocation { int id PK }
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  mermaid.initialize({ startOnLoad: true, theme: 'default', er: { diagramPadding: 20 } });
+</script>
+</body>
+</html>
