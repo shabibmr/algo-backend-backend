@@ -129,6 +129,7 @@ router.delete(
 
 // ── Inventory Item Routes ───────────────────────────────────
 router.get('/item', authorize('Inventory', 'read'), InventoryController.listInventoryItems);
+router.get('/item/lookup', authorize('Inventory', 'read'), InventoryController.lookupItems);
 router.get('/item/:id', authorize('Inventory', 'read'), InventoryController.getInventoryItem);
 router.post(
   '/item',

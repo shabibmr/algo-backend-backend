@@ -23,6 +23,7 @@ export class CompanyProfileRepository extends BaseRepository<companyprofile> {
       modelName: 'companyprofile',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['Company_Name', 'Branch', 'TRN'],
       auditFieldMap: {
         lastModified: 'updated_at',
       },
@@ -36,6 +37,8 @@ export class FinancialYearRepository extends BaseRepository<financialyear> {
       modelName: 'financialyear',
       primaryKeyField: 'id',
       softDeleteField: null,
+      searchFields: ['fy_code', 'display_name'],
+      filterFields: ['company_id', 'status', 'is_default'],
       auditFieldMap: {
         lastModified: 'updated_at',
       },
@@ -49,6 +52,8 @@ export class BranchRepository extends BaseRepository<branch> {
       modelName: 'branch',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['branch_name', 'branch_code'],
+      filterFields: ['company_id', 'is_active'],
       auditFieldMap: {
         lastModified: 'updated_at',
       },
@@ -62,6 +67,8 @@ export class CurrencyRepository extends BaseRepository<currencymaster> {
       modelName: 'currencymaster',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['currency_name', 'iso_code'],
+      filterFields: ['is_base_currency', 'is_active'],
       auditFieldMap: {
         lastModified: 'updated_at',
       },
@@ -88,6 +95,8 @@ export class VoucherSeriesRepository extends BaseRepository<voucherseries> {
       modelName: 'voucherseries',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['display_name', 'prefix', 'voucher_type'],
+      filterFields: ['company_id', 'branch_id', 'financial_year_id', 'voucher_type', 'is_active', 'is_default'],
       auditFieldMap: {
         lastModified: 'updated_at',
       },
@@ -101,6 +110,7 @@ export class ConfigSettingRepository extends BaseRepository<config_settings> {
       modelName: 'config_settings',
       primaryKeyField: 'id',
       softDeleteField: null,
+      searchFields: ['gm_key', 'display_text'],
       auditFieldMap: {
         lastModified: 'updated_at',
       },
@@ -114,6 +124,8 @@ export class AddressBookRepository extends BaseRepository<address_book> {
       modelName: 'address_book',
       primaryKeyField: 'id',
       softDeleteField: 'isActive', // maps toisActive tinyint(1)
+      searchFields: ['Name', 'Company_Name', 'Email'],
+      filterFields: ['contact_type'],
       auditFieldMap: {
         lastModified: null,
       },
@@ -140,6 +152,8 @@ export class AuditLogRepository extends BaseRepository<log> {
       modelName: 'log',
       primaryKeyField: 'id',
       softDeleteField: null,
+      searchFields: ['action', 'data'],
+      filterFields: ['status', 'client_id'],
       auditFieldMap: {
         lastModified: null,
       },
@@ -153,6 +167,7 @@ export class UserRoleRepository extends BaseRepository<user_roles> {
       modelName: 'user_roles',
       primaryKeyField: 'id',
       softDeleteField: null,
+      searchFields: ['role_name', 'description'],
       auditFieldMap: {
         lastModified: null,
       },
@@ -166,6 +181,8 @@ export class UserCredentialsRepository extends BaseRepository<user_credentials> 
       modelName: 'user_credentials',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['username'],
+      filterFields: ['role_id', 'branch_id', 'is_active'],
       auditFieldMap: {
         lastModified: 'updated_at',
       },
@@ -192,6 +209,8 @@ export class ProjectMasterRepository extends BaseRepository<project_master> {
       modelName: 'project_master',
       primaryKeyField: 'id',
       softDeleteField: null,
+      searchFields: ['Project_Name', 'project_code', 'PROJECT_ID'],
+      filterFields: ['parent_project_master_id', 'godown_id'],
       auditFieldMap: {
         lastModified: 'updated_at',
       },

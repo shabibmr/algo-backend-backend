@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ApiResponse } from '../../core/types';
+import { getQueryOptions } from '../../core/utils/listQuery';
 import {
   UomService,
   BrandService,
@@ -20,31 +21,6 @@ import {
   StockLedgerService,
 } from './inventory.service';
 
-
-function getQueryOptions(req) {
-  const page = req.query.page ? Number(req.query.page) : undefined;
-  const limit = req.query.limit ? Number(req.query.limit) : undefined;
-  const search = req.query.search ? String(req.query.search) : undefined;
-  const sortBy = req.query.sortBy ? String(req.query.sortBy) : undefined;
-  const sortOrder = req.query.sortOrder === 'asc' ? 'asc' : 'desc';
-
-  const filters = {};
-  const reservedKeys = ['page', 'limit', 'search', 'sortBy', 'sortOrder'];
-  for (const [key, val] of Object.entries(req.query)) {
-    if (!reservedKeys.includes(key) && val !== undefined && val !== '') {
-      filters[key] = val;
-    }
-  }
-
-  return {
-    page,
-    limit,
-    search,
-    sortBy,
-    sortOrder,
-    filters: Object.keys(filters).length ? filters : undefined,
-  };
-}
 
 export const InventoryController = {
   // ── UOM Controllers ─────────────────────────────────────────
@@ -445,16 +421,28 @@ export const InventoryController = {
   // ── Inventory Item Controllers ────────────────────────────────
   async listInventoryItems(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
       const result = await InventoryItemService.listInventoryItems({
-        page,
-        limit,
+        ...getQueryOptions(req),
         include: {
           uomlist: true,
           sales_inventory_groups: true,
         },
       });
+      const response: ApiResponse<typeof result> = {
+        success: true,
+        data: result,
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
+  async lookupItems(req: Request, res: Response, next: NextFunction) {
+    try {
+      const search = req.query.search ? String(req.query.search) : undefined;
+      const result = await InventoryItemService.lookupItems(search);
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,

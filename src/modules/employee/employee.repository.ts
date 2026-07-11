@@ -22,6 +22,8 @@ export class DepartmentRepository extends BaseRepository<department> {
       modelName: 'department',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['dept_name', 'dept_code'],
+      filterFields: ['parent_dept_id', 'is_active'],
       auditFieldMap: {
         addedBy: 'added_by',
         createdAt: 'created_at',
@@ -38,6 +40,8 @@ export class DesignationRepository extends BaseRepository<designation> {
       modelName: 'designation',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['designation_name', 'designation_code'],
+      filterFields: ['department_id', 'is_active'],
       auditFieldMap: {
         addedBy: 'added_by',
         createdAt: 'created_at',
@@ -54,6 +58,8 @@ export class EmployeeDetailsRepository extends BaseRepository<employee_details> 
       modelName: 'employee_details',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['Name', 'employee_code', 'Phone'],
+      filterFields: ['Designation', 'Gender'],
       auditFieldMap: {
         createdAt: 'created_at',
         lastModified: 'updated_at',
@@ -129,6 +135,8 @@ export class LeavePolicyRepository extends BaseRepository<leavepolicy> {
       modelName: 'leavepolicy',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['display_name', 'leave_type'],
+      filterFields: ['is_active', 'is_paid'],
       auditFieldMap: {
         addedBy: 'added_by',
         createdAt: 'created_at',
@@ -190,6 +198,8 @@ export class ShiftMasterRepository extends BaseRepository<shiftmaster> {
       modelName: 'shiftmaster',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['shift_name', 'shift_code'],
+      filterFields: ['is_active', 'is_night_shift'],
       auditFieldMap: {
         addedBy: 'added_by',
         createdAt: 'created_at',

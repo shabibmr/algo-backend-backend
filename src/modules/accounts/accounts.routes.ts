@@ -36,6 +36,7 @@ router.delete(
 
 // ── Ledgers ──────────────────────────────────────────────────
 router.get('/ledgers', authorize('Accounts', 'read'), AccountsController.listLedgers);
+router.get('/ledgers/lookup', authorize('Accounts', 'read'), AccountsController.lookupLedgers);
 router.get('/ledgers/:id', authorize('Accounts', 'read'), AccountsController.getLedger);
 router.post(
   '/ledgers',

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { OrganizationService } from './organization.service';
 import { ApiResponse } from '../../core/types';
+import { getQueryOptions } from '../../core/utils/listQuery';
 
 export const OrganizationController = {
   // ── Company Profile ──────────────────────────────────────────
@@ -299,9 +300,7 @@ export const OrganizationController = {
   // ── Audit Logs ───────────────────────────────────────────────
   async getAuditLogs(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : 1;
-      const limit = req.query.limit ? Number(req.query.limit) : 20;
-      const logs = await OrganizationService.getAuditLogs(page, limit);
+      const logs = await OrganizationService.getAuditLogs(getQueryOptions(req));
       const response: ApiResponse<typeof logs> = {
         success: true,
         data: logs,
@@ -609,10 +608,7 @@ export const OrganizationController = {
   // ── Task 33: UserCredentials list/get/delete ─────────────────
   async listUsers(req: Request, res: Response, next: NextFunction) {
     try {
-      const data = await OrganizationService.listUsers(
-        Number(req.query.page) || 1,
-        Number(req.query.limit) || 20,
-      );
+      const data = await OrganizationService.listUsers(getQueryOptions(req));
       return res.status(200).json({ success: true, data, requestId: req.requestId });
     } catch (err) {
       return next(err);
@@ -651,7 +647,7 @@ export const OrganizationController = {
   async listProjects(req: Request, res: Response, next: NextFunction) {
     try {
       const parentId = req.query.parent_id ? Number(req.query.parent_id) : undefined;
-      const data = await OrganizationService.listProjects(parentId);
+      const data = await OrganizationService.listProjects(parentId, getQueryOptions(req));
       return res.status(200).json({ success: true, data, requestId: req.requestId });
     } catch (err) {
       return next(err);

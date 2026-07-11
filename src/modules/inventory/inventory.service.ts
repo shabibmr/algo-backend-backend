@@ -175,6 +175,8 @@ export const TaxCategoryService = {
 
 // ── Inventory Group Service ──────────────────────────────────
 export const InventoryGroupService = {
+  // Returns the full group tree (not a real paginated page — `meta` just reflects
+  // the fixed 1000-row cap so callers building a tree view get every node at once).
   async listInventoryGroups() {
     const result = await groupRepo.findMany({ limit: 1000 });
     const items = [];
@@ -283,6 +285,20 @@ export const InventoryGroupService = {
 export const InventoryItemService = {
   async listInventoryItems(options: any) {
     return itemRepo.findMany(options);
+  },
+
+  // Slim (id, label) projection for FK pickers — avoids fetching full item rows just to render a dropdown.
+  async lookupItems(search?: string) {
+    const result = await itemRepo.findMany({
+      search,
+      limit: 50,
+      select: { id: true, Item_Name: true, Item_Code: true },
+    });
+    return result.items.map((item: any) => ({
+      id: item.id,
+      label: item.Item_Name,
+      code: item.Item_Code,
+    }));
   },
 
   async getInventoryItem(id: number) {

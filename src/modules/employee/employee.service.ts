@@ -50,6 +50,8 @@ function getDatesInRange(startDate: Date, endDate: Date): Date[] {
 }
 
 export const DepartmentService = {
+  // Returns the full department tree (not a real paginated page — `meta` just reflects
+  // the fixed 1000-row cap so callers building a tree view get every node at once).
   async listDepartments() {
     const result = await departmentRepo.findMany({ limit: 1000 });
     const items = [];

@@ -20,6 +20,7 @@ import { ConfigSettingService } from '../../core/services/ConfigSettingService';
 import { ConflictError, NotFoundError, ValidationError } from '../../core/errors/AppError';
 import { hashPassword } from '../../core/auth/password';
 import { clearPermissionCache } from '../../core/middleware/authorize';
+import { ListQueryOptions } from '../../core/utils/listQuery';
 
 const companyRepo = new CompanyProfileRepository();
 const fyRepo = new FinancialYearRepository();
@@ -121,9 +122,11 @@ export const OrganizationService = {
 
   // ── Branch ───────────────────────────────────────────────────
   async listBranches(companyId: number) {
+    // Reference data — always return the full list, not a paginated page.
     return branchRepo.findMany({
       where: { company_id: companyId },
       orderBy: { branch_name: 'asc' },
+      limit: 1000,
     });
   },
 
@@ -158,8 +161,10 @@ export const OrganizationService = {
 
   // ── Currency ─────────────────────────────────────────────────
   async listCurrencies() {
+    // Reference data — always return the full list, not a paginated page.
     return currencyRepo.findMany({
       orderBy: { iso_code: 'asc' },
+      limit: 1000,
     });
   },
 
@@ -233,7 +238,8 @@ export const OrganizationService = {
     if (branchId !== undefined) {
       where.branch_id = branchId;
     }
-    return seriesRepo.findMany({ where, orderBy: { voucher_type: 'asc' } });
+    // Reference data — always return the full list, not a paginated page.
+    return seriesRepo.findMany({ where, orderBy: { voucher_type: 'asc' }, limit: 1000 });
   },
 
   async createVoucherSeries(data: any, user?: string) {
@@ -311,11 +317,10 @@ export const OrganizationService = {
   },
 
   // ── Audit Logs (Read Only) ───────────────────────────────────
-  async getAuditLogs(page: number, limit: number) {
+  async getAuditLogs(options: ListQueryOptions) {
     return auditRepo.findMany({
-      orderBy: { timestamp: 'desc' },
-      page,
-      limit,
+      orderBy: options.sortBy ? undefined : { timestamp: 'desc' },
+      ...options,
     });
   },
 
@@ -335,7 +340,8 @@ export const OrganizationService = {
   },
 
   async listRoles() {
-    return roleRepo.findMany({ orderBy: { role_name: 'asc' } });
+    // Reference data — always return the full list, not a paginated page.
+    return roleRepo.findMany({ orderBy: { role_name: 'asc' }, limit: 1000 });
   },
 
   // ── RBAC Admin: User Access Permissions ─────────────────────
@@ -514,8 +520,8 @@ export const OrganizationService = {
   },
 
   // ── Task 33: UserCredentials list/get/delete ─────────────────
-  async listUsers(page = 1, limit = 20) {
-    return credsRepo.findMany({ page, limit, orderBy: { username: 'asc' } });
+  async listUsers(options: ListQueryOptions) {
+    return credsRepo.findMany({ orderBy: options.sortBy ? undefined : { username: 'asc' }, ...options });
   },
 
   async getUser(id: number) {
@@ -532,14 +538,20 @@ export const OrganizationService = {
 
   // ── Task 35: CompanyProfile list ─────────────────────────────
   async listCompanyProfiles() {
-    return companyRepo.findMany({ orderBy: { id: 'asc' } });
+    // Reference data — always return the full list, not a paginated page.
+    return companyRepo.findMany({ orderBy: { id: 'asc' }, limit: 1000 });
   },
 
   // ── Task 36: ProjectMaster CRUD ──────────────────────────────
-  async listProjects(parentId?: number) {
+  async listProjects(parentId?: number, options: ListQueryOptions = { sortOrder: 'asc' }) {
     const where: any = {};
     if (parentId !== undefined) where.parent_project_master_id = parentId;
-    return projectRepo.findMany({ where, orderBy: { Project_Name: 'asc' } });
+    return projectRepo.findMany({
+      where,
+      orderBy: options.sortBy ? undefined : { Project_Name: 'asc' },
+      limit: 1000,
+      ...options,
+    });
   },
 
   async getProject(id: number) {

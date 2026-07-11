@@ -16,6 +16,8 @@ const chequeRepo = new ChequeDetailsRepository();
 
 export const AccountsService = {
   // ── Account Group self-referential hierarchy ──────────────────
+  // Returns the full group tree (not a real paginated page — `meta` just reflects
+  // the fixed 1000-row cap so callers building a tree view get every node at once).
   async listAccountGroups() {
     const result = await groupRepo.findMany({ limit: 1000 });
     const items = [];
@@ -131,6 +133,21 @@ export const AccountsService = {
       ...ledger,
       contact,
     };
+  },
+
+  // Slim (id, label) projection for FK pickers — avoids fetching full ledger rows with relations.
+  async lookupLedgers(search?: string) {
+    const result = await ledgerRepo.findMany({
+      search,
+      limit: 50,
+      select: { id: true, Ledger_Name: true, ledger_code: true, Ledger_Type: true },
+    });
+    return result.items.map((ledger: any) => ({
+      id: ledger.id,
+      label: ledger.Ledger_Name,
+      code: ledger.ledger_code,
+      type: ledger.Ledger_Type,
+    }));
   },
 
   async listLedgers(options?: any) {
