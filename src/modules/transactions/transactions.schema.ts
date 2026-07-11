@@ -25,6 +25,7 @@ export const salesInvoicePostSchema = z.object({
     lines: z.array(salesInvoiceLineSchema).min(1, 'At least one item line is required'),
     source_voucher_id: z.number().int().optional().nullable(),
     source_voucher_type: z.string().max(50).optional().nullable(),
+    status: z.enum(['Draft', 'Posted']).optional(),
   }),
 });
 

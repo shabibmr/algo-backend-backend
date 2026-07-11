@@ -56,6 +56,24 @@ export const OrganizationController = {
     }
   },
 
+  async getActiveFinancialYear(req: Request, res: Response, next: NextFunction) {
+    try {
+      const companyId = req.query.companyId ? Number(req.query.companyId) : req.user?.companyId;
+      if (!companyId) {
+        return res.status(400).json({ success: false, message: 'companyId is required' });
+      }
+      const activeFY = await OrganizationService.getActiveFinancialYear(companyId);
+      const response: ApiResponse<typeof activeFY> = {
+        success: true,
+        data: activeFY,
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
   async createFinancialYear(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user?.username;

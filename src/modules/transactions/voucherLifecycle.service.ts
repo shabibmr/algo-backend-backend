@@ -128,8 +128,48 @@ const VOUCHER_META: Record<string, VoucherMeta> = {
   },
 };
 
+function normalizeVoucherType(type: string): string {
+  const lower = type.toLowerCase().replace(/[-_]/g, '');
+  const mapping: Record<string, string> = {
+    salesinvoice: 'SalesInvoice',
+    salesinvoices: 'SalesInvoice',
+    purchaseinvoice: 'PurchaseInvoice',
+    purchaseinvoices: 'PurchaseInvoice',
+    payment: 'Payment',
+    payments: 'Payment',
+    receipt: 'Receipt',
+    receipts: 'Receipt',
+    contra: 'Contra',
+    journal: 'Journal',
+    journals: 'Journal',
+    creditnote: 'CreditNote',
+    creditnotes: 'CreditNote',
+    debitnote: 'DebitNote',
+    debitnotes: 'DebitNote',
+    quotation: 'Quotation',
+    quotations: 'Quotation',
+    salesorder: 'SalesOrder',
+    salesorders: 'SalesOrder',
+    purchaseorder: 'PurchaseOrder',
+    purchaseorders: 'PurchaseOrder',
+    deliverynote: 'DeliveryNote',
+    deliverynotes: 'DeliveryNote',
+    receiptnote: 'ReceiptNote',
+    receiptnotes: 'ReceiptNote',
+    godowntransfer: 'GodownTransfer',
+    godowntransfers: 'GodownTransfer',
+    materialin: 'MaterialIn',
+    requirement: 'Requirement',
+    requirements: 'Requirement',
+    stockrequest: 'StockRequest',
+    stockrequests: 'StockRequest'
+  };
+  return mapping[lower] || type;
+}
+
 function getMeta(type: string): VoucherMeta {
-  const meta = VOUCHER_META[type];
+  const normalized = normalizeVoucherType(type);
+  const meta = VOUCHER_META[normalized];
   if (!meta) throw new ValidationError(`Unknown voucher type: ${type}`);
   return meta;
 }
@@ -142,10 +182,11 @@ function delegate(modelName: string, tx?: any) {
 }
 
 async function getMainOrThrow(type: string, id: number, tx?: any) {
-  const meta = getMeta(type);
+  const normalized = normalizeVoucherType(type);
+  const meta = getMeta(normalized);
   const row = await delegate(meta.mainModel, tx).findUnique({ where: { id } });
-  if (!row) throw new NotFoundError(`${type} #${id} not found`);
-  return { meta, row };
+  if (!row) throw new NotFoundError(`${normalized} #${id} not found`);
+  return { meta, row, normalizedType: normalized };
 }
 
 // ─── Task 23: Edit (Draft only) ──────────────────────────────────────────────
@@ -157,11 +198,11 @@ export interface EditPayload {
 
 export const VoucherEditService = {
   async edit(type: string, id: number, payload: EditPayload, username: string, userId?: number) {
-    const { meta, row } = await getMainOrThrow(type, id);
+    const { meta, row, normalizedType } = await getMainOrThrow(type, id);
 
     if (row.VoucherStatus !== 'Draft') {
       throw new ConflictError(
-        `Cannot edit ${type} #${id}: status is '${row.VoucherStatus}'. Only Draft vouchers are editable.`,
+        `Cannot edit ${normalizedType} #${id}: status is '${row.VoucherStatus}'. Only Draft vouchers are editable.`,
       );
     }
 
@@ -187,12 +228,12 @@ export const VoucherEditService = {
       await auditService.log(
         'UPDATE',
         'SUCCESS',
-        { type, id, message: 'Draft voucher edited' },
+        { type: normalizedType, id, message: 'Draft voucher edited' },
         userId || username,
         tx,
       );
 
-      return { id, type, status: 'Draft', message: 'Voucher updated' };
+      return { id, type: normalizedType, status: 'Draft', message: 'Voucher updated' };
     });
   },
 };
@@ -201,14 +242,14 @@ export const VoucherEditService = {
 
 export const VoucherCancelService = {
   async cancel(type: string, id: number, username: string, userId?: number) {
-    const { meta, row } = await getMainOrThrow(type, id);
+    const { meta, row, normalizedType } = await getMainOrThrow(type, id);
 
     if (row.VoucherStatus === 'Cancelled') {
-      throw new ConflictError(`${type} #${id} is already Cancelled.`);
+      throw new ConflictError(`${normalizedType} #${id} is already Cancelled.`);
     }
     if (row.VoucherStatus !== 'Posted' && row.VoucherStatus !== 'Approved') {
       throw new ConflictError(
-        `Cannot cancel ${type} #${id} with status '${row.VoucherStatus}'. Only Posted or Approved vouchers can be cancelled.`,
+        `Cannot cancel ${normalizedType} #${id} with status '${row.VoucherStatus}'. Only Posted or Approved vouchers can be cancelled.`,
       );
     }
 
@@ -222,7 +263,7 @@ export const VoucherCancelService = {
     });
     if (downstreamLinks.length) {
       throw new ConflictError(
-        `Cannot cancel ${type} #${id}: it has ${downstreamLinks.length} downstream linked document(s). Cancel those first.`,
+        `Cannot cancel ${normalizedType} #${id}: it has ${downstreamLinks.length} downstream linked document(s). Cancel those first.`,
       );
     }
 
@@ -297,12 +338,12 @@ export const VoucherCancelService = {
       await auditService.log(
         'DELETE',
         'SUCCESS',
-        { type, id, message: `${type} #${id} cancelled with GL/stock reversal` },
+        { type: normalizedType, id, message: `${normalizedType} #${id} cancelled with GL/stock reversal` },
         userId || username,
         tx,
       );
 
-      return { id, type, status: 'Cancelled', message: 'Voucher cancelled and reversed' };
+      return { id, type: normalizedType, status: 'Cancelled', message: 'Voucher cancelled and reversed' };
     });
   },
 };
@@ -311,16 +352,16 @@ export const VoucherCancelService = {
 
 export const VoucherApprovalService = {
   async approve(type: string, id: number, username: string, userId?: number) {
-    const { meta, row } = await getMainOrThrow(type, id);
+    const { meta, row, normalizedType } = await getMainOrThrow(type, id);
 
     if (row.VoucherStatus === 'Posted') {
-      throw new ConflictError(`${type} #${id} is already Posted.`);
+      throw new ConflictError(`${normalizedType} #${id} is already Posted.`);
     }
     if (row.VoucherStatus === 'Cancelled') {
       throw new ConflictError(`Cannot approve a Cancelled voucher.`);
     }
     if (row.VoucherStatus !== 'Draft' && row.VoucherStatus !== 'Approved') {
-      throw new ConflictError(`${type} #${id} has unexpected status '${row.VoucherStatus}'.`);
+      throw new ConflictError(`${normalizedType} #${id} has unexpected status '${row.VoucherStatus}'.`);
     }
 
     const header = await prisma.voucher_headers.findUnique({ where: { id } });
@@ -328,7 +369,7 @@ export const VoucherApprovalService = {
     // Check series require_approval flag
     const series = header
       ? await prisma.voucherseries.findFirst({
-          where: { voucher_type: type, prefix: header.voucher_prefix },
+          where: { voucher_type: normalizedType, prefix: header.voucher_prefix },
         })
       : null;
 
@@ -353,17 +394,17 @@ export const VoucherApprovalService = {
       await auditService.log(
         'APPROVE',
         'SUCCESS',
-        { type, id, previousStatus: row.VoucherStatus, newStatus: nextStatus },
+        { type: normalizedType, id, previousStatus: row.VoucherStatus, newStatus: nextStatus },
         userId || username,
         tx,
       );
 
-      return { id, type, status: nextStatus, message: `Voucher status updated to ${nextStatus}` };
+      return { id, type: normalizedType, status: nextStatus, message: `Voucher status updated to ${nextStatus}` };
     });
   },
 
   async reject(type: string, id: number, reason: string, username: string, userId?: number) {
-    const { meta, row } = await getMainOrThrow(type, id);
+    const { meta, row, normalizedType } = await getMainOrThrow(type, id);
 
     if (row.VoucherStatus === 'Posted') {
       throw new ConflictError(`Cannot reject a Posted voucher — use cancel instead.`);
@@ -386,12 +427,12 @@ export const VoucherApprovalService = {
       await auditService.log(
         'UPDATE',
         'SUCCESS',
-        { type, id, message: `Rejected: ${reason}` },
+        { type: normalizedType, id, message: `Rejected: ${reason}` },
         userId || username,
         tx,
       );
 
-      return { id, type, status: 'Rejected', reason };
+      return { id, type: normalizedType, status: 'Rejected', reason };
     });
   },
 };

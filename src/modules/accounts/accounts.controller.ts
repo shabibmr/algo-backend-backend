@@ -2,6 +2,31 @@ import { Request, Response, NextFunction } from 'express';
 import { AccountsService, LedgerBalanceService, OutstandingService } from './accounts.service';
 import { ApiResponse } from '../../core/types';
 
+function getQueryOptions(req: Request) {
+  const page = req.query.page ? Number(req.query.page) : undefined;
+  const limit = req.query.limit ? Number(req.query.limit) : undefined;
+  const search = req.query.search ? String(req.query.search) : undefined;
+  const sortBy = req.query.sortBy ? String(req.query.sortBy) : undefined;
+  const sortOrder = req.query.sortOrder === 'asc' ? 'asc' : 'desc';
+
+  const filters: Record<string, any> = {};
+  const reservedKeys = ['page', 'limit', 'search', 'sortBy', 'sortOrder'];
+  for (const [key, val] of Object.entries(req.query)) {
+    if (!reservedKeys.includes(key) && val !== undefined && val !== '') {
+      filters[key] = val;
+    }
+  }
+
+  return {
+    page,
+    limit,
+    search,
+    sortBy,
+    sortOrder,
+    filters: Object.keys(filters).length ? filters : undefined,
+  };
+}
+
 export const AccountsController = {
   // ── Account Group ────────────────────────────────────────────
   async listAccountGroups(req: Request, res: Response, next: NextFunction) {
@@ -69,7 +94,7 @@ export const AccountsController = {
   // ── Ledger Master ────────────────────────────────────────────
   async listLedgers(req: Request, res: Response, next: NextFunction) {
     try {
-      const ledgers = await AccountsService.listLedgers();
+      const ledgers = await AccountsService.listLedgers(getQueryOptions(req));
       const response: ApiResponse<typeof ledgers> = {
         success: true,
         data: ledgers,

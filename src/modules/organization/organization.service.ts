@@ -58,6 +58,18 @@ export const OrganizationService = {
     });
   },
 
+  async getActiveFinancialYear(companyId: number) {
+    return (
+      (await prisma.financialyear.findFirst({
+        where: { company_id: companyId, is_default: true },
+      })) ||
+      (await prisma.financialyear.findFirst({
+        where: { company_id: companyId },
+        orderBy: { start_date: 'desc' },
+      }))
+    );
+  },
+
   async createFinancialYear(data: any, user?: string) {
     // Check unique fy_code + company_id
     const existing = await fyRepo.findFirst({

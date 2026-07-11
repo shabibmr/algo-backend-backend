@@ -35,6 +35,9 @@ function extractFilters(req: Request): ListFilters {
     status: q.status,
     page: q.page ? parseInt(q.page) : undefined,
     limit: q.limit ? parseInt(q.limit) : undefined,
+    search: q.search,
+    sortBy: q.sortBy,
+    sortOrder: q.sortOrder as any,
   };
 }
 

@@ -28,6 +28,8 @@ export class LedgerMasterRepository extends BaseRepository<ledger_master> {
       modelName: 'ledger_master',
       primaryKeyField: 'id',
       softDeleteField: 'is_active',
+      searchFields: ['Ledger_Name', 'Ledger_Type', 'ledger_code', 'currency_code'],
+      filterFields: ['Ledger_Type', 'is_system_defined', 'is_active', 'account_group_id'],
       auditFieldMap: {
         createdAt: 'Date_Created',
         lastModified: 'Last_Modified',

@@ -4,6 +4,7 @@ import { ValidationError, NotFoundError } from '../../core/errors/AppError';
 import { toDecimal, add, sub, mul, round, sum } from '../../core/utils/decimal';
 import { auditService } from '../../core/audit/auditService';
 import { Prisma } from '@prisma/client';
+import { StockLedgerService } from '../inventory/inventory.service';
 
 // Helper: check if a financial year is locked
 async function assertFyNotLocked(fyCode: string) {
@@ -678,6 +679,7 @@ export const DeliveryReceiptNoteService = {
       const stockLedgerEntries = [];
 
       for (const line of payload.lines) {
+        await StockLedgerService.assertStockAvailable(line.item_id, payload.godown_id, line.quantity);
         const qty = toDecimal(line.quantity);
         const price = toDecimal(line.price);
         const lineSubtotal = mul(qty, price);

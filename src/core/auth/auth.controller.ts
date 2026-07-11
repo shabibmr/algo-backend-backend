@@ -181,6 +181,33 @@ export const authController = {
 
       if (!user || !user.is_active) throw new UnauthorizedError('User not found or inactive');
 
+      let companyId = req.user?.companyId;
+      if (!companyId && user.branch_id) {
+        const branch = await prisma.branch.findUnique({
+          where: { id: user.branch_id },
+        });
+        if (branch) {
+          companyId = branch.company_id;
+        }
+      }
+      if (!companyId) {
+        const company = await prisma.companyprofile.findFirst();
+        if (company) {
+          companyId = company.id;
+        }
+      }
+
+      const activeFY = companyId ? (await prisma.financialyear.findFirst({
+        where: { company_id: companyId, is_default: true },
+      }) || await prisma.financialyear.findFirst({
+        where: { company_id: companyId },
+        orderBy: { start_date: 'desc' },
+      })) : null;
+
+      const permissions = await prisma.user_access_permissions.findMany({
+        where: { role_id: user.role_id },
+      });
+
       const response: ApiResponse<any> = {
         success: true,
         data: {
@@ -189,8 +216,54 @@ export const authController = {
           roleId: user.role_id,
           roleName: user.user_roles.role_name,
           branchId: user.branch_id,
-          companyId: req.user?.companyId,
+          companyId,
           lastLoginAt: user.last_login_at,
+          activeFinancialYear: activeFY ? {
+            id: activeFY.id,
+            fyCode: activeFY.fy_code,
+            displayName: activeFY.display_name,
+            startDate: activeFY.start_date,
+            endDate: activeFY.end_date,
+            status: activeFY.status,
+          } : null,
+          permissions: permissions.map(p => ({
+            module_name: p.module_name || '',
+            Allow_Create: !!p.Allow_Create,
+            Allow_Read: !!p.Allow_Read,
+            Allow_Update: !!p.Allow_Update,
+            Allow_Delete: !!p.Allow_Delete,
+            Allow_Share: !!p.Allow_Share,
+          })),
+        },
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
+  // ── BE-001: GET /auth/permissions ────────────────────────────
+  async permissions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const roleId = req.user?.roleId;
+      if (!roleId) throw new UnauthorizedError('Not authenticated');
+
+      const permissions = await prisma.user_access_permissions.findMany({
+        where: { role_id: roleId },
+      });
+
+      const response: ApiResponse<any> = {
+        success: true,
+        data: {
+          permissions: permissions.map(p => ({
+            module_name: p.module_name || '',
+            Allow_Create: !!p.Allow_Create,
+            Allow_Read: !!p.Allow_Read,
+            Allow_Update: !!p.Allow_Update,
+            Allow_Delete: !!p.Allow_Delete,
+            Allow_Share: !!p.Allow_Share,
+          })),
         },
         requestId: req.requestId,
       };

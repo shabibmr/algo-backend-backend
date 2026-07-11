@@ -15,6 +15,7 @@ router.post('/refresh', validate(refreshSchema), authController.refresh);
 
 // Tasks 44-46: protected auth routes
 router.get('/me', authenticate, authController.me);
+router.get('/permissions', authenticate, authController.permissions);
 router.post(
   '/change-password',
   authenticate,

@@ -5,6 +5,7 @@ import { ValidationError, NotFoundError } from '../../core/errors/AppError';
 import { toDecimal, add, sub, mul, round, sum } from '../../core/utils/decimal';
 import { auditService } from '../../core/audit/auditService';
 import { Prisma } from '@prisma/client';
+import { StockLedgerService } from '../inventory/inventory.service';
 
 export interface SalesInvoiceLineInput {
   item_id: number;
@@ -219,6 +220,9 @@ export const VoucherPostingService = {
       const linesToInsert = [];
 
       for (const line of payload.lines) {
+        if (payload.status !== 'Draft') {
+          await StockLedgerService.assertStockAvailable(line.item_id, payload.godown_id, line.quantity);
+        }
         const qty = toDecimal(line.quantity);
         const price = toDecimal(line.price);
         const lineSubtotal = mul(qty, price);
@@ -268,7 +272,7 @@ export const VoucherPostingService = {
           Discount_in_Amount: discountSum.toNumber(),
           Vat_Amount: taxSum.toNumber(),
           Gross_Total: grossTotal.toNumber(),
-          VoucherStatus: 'Posted',
+          VoucherStatus: payload.status === 'Draft' ? 'Draft' : 'Posted',
           Added_By: user,
           Voucher_No_Display: voucherNo,
           Round_Off: roundOff,
@@ -281,107 +285,109 @@ export const VoucherPostingService = {
         data: linesToInsert,
       });
 
-      // ── Double-Entry GL Posting ──────────────────────────────
-      // Resolve Sales and Tax Ledgers
-      const salesLedgerId = await ConfigSettingService.get('SALES_LEDGER_ID', 2); // standard sales account
-      const taxLedgerId = await ConfigSettingService.get('TAX_LEDGER_ID', 3); // standard Output VAT account
+      if (payload.status !== 'Draft') {
+        // ── Double-Entry GL Posting ──────────────────────────────
+        // Resolve Sales and Tax Ledgers
+        const salesLedgerId = await ConfigSettingService.get('SALES_LEDGER_ID', 2); // standard sales account
+        const taxLedgerId = await ConfigSettingService.get('TAX_LEDGER_ID', 3); // standard Output VAT account
 
-      // Balanced ledger entries:
-      // 1. Debit Customer (Gross Total)
-      const customerLedgerEntry = {
-        voucher_header_id: header.id,
-        ledger_id: payload.customer_ledger_id,
-        debit_amount: grossTotal,
-        credit_amount: toDecimal(0),
-        posting_date: new Date(payload.voucher_date),
-        narration: payload.narration || `Sales Invoice ${voucherNo}`,
-      };
-
-      // 2. Credit Sales (Gross Total - VAT)
-      const salesLedgerEntry = {
-        voucher_header_id: header.id,
-        ledger_id: salesLedgerId,
-        debit_amount: toDecimal(0),
-        credit_amount: sub(grossTotal, taxSum),
-        posting_date: new Date(payload.voucher_date),
-        narration: payload.narration || `Sales Sales Invoice ${voucherNo}`,
-      };
-
-      // Create transactions array
-      const journalEntries = [customerLedgerEntry, salesLedgerEntry];
-
-      // 3. Credit VAT (if VAT > 0)
-      if (taxSum.greaterThan(0)) {
-        journalEntries.push({
+        // Balanced ledger entries:
+        // 1. Debit Customer (Gross Total)
+        const customerLedgerEntry = {
           voucher_header_id: header.id,
-          ledger_id: taxLedgerId,
+          ledger_id: payload.customer_ledger_id,
+          debit_amount: grossTotal,
+          credit_amount: toDecimal(0),
+          posting_date: new Date(payload.voucher_date),
+          narration: payload.narration || `Sales Invoice ${voucherNo}`,
+        };
+
+        // 2. Credit Sales (Gross Total - VAT)
+        const salesLedgerEntry = {
+          voucher_header_id: header.id,
+          ledger_id: salesLedgerId,
           debit_amount: toDecimal(0),
-          credit_amount: taxSum,
+          credit_amount: sub(grossTotal, taxSum),
           posting_date: new Date(payload.voucher_date),
-          narration: `Output VAT @ ${payload.lines[0]?.tax_rate || 5}% for ${voucherNo}`,
+          narration: payload.narration || `Sales Sales Invoice ${voucherNo}`,
+        };
+
+        // Create transactions array
+        const journalEntries = [customerLedgerEntry, salesLedgerEntry];
+
+        // 3. Credit VAT (if VAT > 0)
+        if (taxSum.greaterThan(0)) {
+          journalEntries.push({
+            voucher_header_id: header.id,
+            ledger_id: taxLedgerId,
+            debit_amount: toDecimal(0),
+            credit_amount: taxSum,
+            posting_date: new Date(payload.voucher_date),
+            narration: `Output VAT @ ${payload.lines[0]?.tax_rate || 5}% for ${voucherNo}`,
+          });
+        }
+
+        // Assert double entry balance (Σdebit == Σcredit)
+        const sumDebits = sum(journalEntries.map((e) => e.debit_amount));
+        const sumCredits = sum(journalEntries.map((e) => e.credit_amount));
+        if (!sumDebits.equals(sumCredits)) {
+          throw new ValidationError(
+            `Double entry imbalance: Debits (${sumDebits}) != Credits (${sumCredits})`,
+          );
+        }
+
+        // Insert Journal Entries
+        await tx.journal_ledger.createMany({
+          data: journalEntries.map((e) => ({
+            voucher_header_id: e.voucher_header_id,
+            ledger_id: e.ledger_id,
+            debit_amount: e.debit_amount,
+            credit_amount: e.credit_amount,
+            posting_date: e.posting_date,
+            narration: e.narration,
+          })),
+        });
+
+        // ── Inventory Stock Posting ──────────────────────────────
+        const stockLedgerEntries = [];
+        for (const line of payload.lines) {
+          stockLedgerEntries.push({
+            voucher_header_id: header.id,
+            item_id: line.item_id,
+            sku_id: line.sku_id || null,
+            godown_id: payload.godown_id,
+            quantity_in: new Prisma.Decimal(0),
+            quantity_out: new Prisma.Decimal(line.quantity),
+            unit_cost: new Prisma.Decimal(line.price),
+            total_cost: new Prisma.Decimal(line.quantity * line.price),
+            posting_date: new Date(payload.voucher_date),
+          });
+        }
+
+        await tx.stock_ledger.createMany({
+          data: stockLedgerEntries,
+        });
+
+        // ── Billwise Record (New Ref) ─────────────────────────────
+        await tx.billwise_records.create({
+          data: {
+            voucherPrefix: payload.voucher_prefix,
+            VoucherType: 'SalesInvoice',
+            VoucherNo: voucherNo,
+            LedgerID: String(payload.customer_ledger_id),
+            RefType: 'New Ref',
+            RefNo: voucherNo,
+            RefPrefix: payload.voucher_prefix,
+            DebitAmount: grossTotal.toNumber(),
+            CreditAmount: 0,
+            VoucherDate: new Date(payload.voucher_date),
+            Due_Date: new Date(
+              new Date(payload.voucher_date).getTime() +
+                (payload.credit_days || 30) * 24 * 60 * 60 * 1000,
+            ),
+          },
         });
       }
-
-      // Assert double entry balance (Σdebit == Σcredit)
-      const sumDebits = sum(journalEntries.map((e) => e.debit_amount));
-      const sumCredits = sum(journalEntries.map((e) => e.credit_amount));
-      if (!sumDebits.equals(sumCredits)) {
-        throw new ValidationError(
-          `Double entry imbalance: Debits (${sumDebits}) != Credits (${sumCredits})`,
-        );
-      }
-
-      // Insert Journal Entries
-      await tx.journal_ledger.createMany({
-        data: journalEntries.map((e) => ({
-          voucher_header_id: e.voucher_header_id,
-          ledger_id: e.ledger_id,
-          debit_amount: e.debit_amount,
-          credit_amount: e.credit_amount,
-          posting_date: e.posting_date,
-          narration: e.narration,
-        })),
-      });
-
-      // ── Inventory Stock Posting ──────────────────────────────
-      const stockLedgerEntries = [];
-      for (const line of payload.lines) {
-        stockLedgerEntries.push({
-          voucher_header_id: header.id,
-          item_id: line.item_id,
-          sku_id: line.sku_id || null,
-          godown_id: payload.godown_id,
-          quantity_in: new Prisma.Decimal(0),
-          quantity_out: new Prisma.Decimal(line.quantity),
-          unit_cost: new Prisma.Decimal(line.price),
-          total_cost: new Prisma.Decimal(line.quantity * line.price),
-          posting_date: new Date(payload.voucher_date),
-        });
-      }
-
-      await tx.stock_ledger.createMany({
-        data: stockLedgerEntries,
-      });
-
-      // ── Billwise Record (New Ref) ─────────────────────────────
-      await tx.billwise_records.create({
-        data: {
-          voucherPrefix: payload.voucher_prefix,
-          VoucherType: 'SalesInvoice',
-          VoucherNo: voucherNo,
-          LedgerID: String(payload.customer_ledger_id),
-          RefType: 'New Ref',
-          RefNo: voucherNo,
-          RefPrefix: payload.voucher_prefix,
-          DebitAmount: grossTotal.toNumber(),
-          CreditAmount: 0,
-          VoucherDate: new Date(payload.voucher_date),
-          Due_Date: new Date(
-            new Date(payload.voucher_date).getTime() +
-              (payload.credit_days || 30) * 24 * 60 * 60 * 1000,
-          ),
-        },
-      });
 
       if (payload.source_voucher_id) {
         await tx.voucherlinkage.create({

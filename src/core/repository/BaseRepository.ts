@@ -5,6 +5,8 @@ export interface RepositoryConfig {
   modelName: string; // matches the key in prisma client, e.g. 'ledger_master'
   primaryKeyField?: string; // default: 'id' or '_id'
   softDeleteField?: string | null; // default: 'is_active', null to disable
+  searchFields?: string[];
+  filterFields?: string[];
   auditFieldMap?: {
     addedBy?: string | null; // e.g. 'added_by'
     createdAt?: string | null; // e.g. 'created_at'
@@ -17,6 +19,8 @@ export class BaseRepository<T> {
   protected modelName: string;
   protected pkField: string;
   protected softDeleteField: string | null;
+  protected searchFields: string[];
+  protected filterFields: string[];
   protected auditMap: {
     addedBy: string | null;
     createdAt: string | null;
@@ -29,6 +33,8 @@ export class BaseRepository<T> {
     this.pkField = config.primaryKeyField || 'id';
     this.softDeleteField =
       config.softDeleteField === undefined ? 'is_active' : config.softDeleteField;
+    this.searchFields = config.searchFields || [];
+    this.filterFields = config.filterFields || [];
     this.auditMap = {
       addedBy: config.auditFieldMap?.addedBy || null,
       createdAt: config.auditFieldMap?.createdAt || null,
@@ -111,22 +117,96 @@ export class BaseRepository<T> {
     orderBy?: any;
     page?: number;
     limit?: number;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    filters?: Record<string, any>;
     includeInactive?: boolean;
     tx?: any;
   }): Promise<Paginated<T>> {
     const delegate = this.getDelegate(options.tx);
-    const where = this.applySoftDelete(options.where || {}, options.includeInactive);
+    let where = this.applySoftDelete(options.where || {}, options.includeInactive);
+
+    // 1. Full-text search
+    if (options.search && this.searchFields.length > 0) {
+      const searchConditions = this.searchFields.map(field => ({
+        [field]: {
+          contains: options.search,
+        }
+      }));
+      where = {
+        ...where,
+        OR: searchConditions,
+      };
+    }
+
+    // 2. Field Filters
+    if (options.filters) {
+      const filterConditions: any = {};
+      for (const [key, val] of Object.entries(options.filters)) {
+        if (val === undefined || val === '') continue;
+
+        if (key === 'from_date') {
+          const dateField = this.modelName.includes('voucher') || this.modelName.includes('invoice') || this.modelName.includes('note') ? 'voucher_date' : 'created_at';
+          filterConditions[dateField] = {
+            ...(filterConditions[dateField] || {}),
+            gte: new Date(String(val)),
+          };
+          continue;
+        }
+        if (key === 'to_date') {
+          const dateField = this.modelName.includes('voucher') || this.modelName.includes('invoice') || this.modelName.includes('note') ? 'voucher_date' : 'created_at';
+          filterConditions[dateField] = {
+            ...(filterConditions[dateField] || {}),
+            lte: new Date(String(val)),
+          };
+          continue;
+        }
+
+        if (this.filterFields.length > 0 && !this.filterFields.includes(key)) {
+          continue;
+        }
+
+        if (val === 'true') {
+          filterConditions[key] = true;
+        } else if (val === 'false') {
+          filterConditions[key] = false;
+        } else if (val === 'null') {
+          filterConditions[key] = null;
+        } else if (!isNaN(Number(val)) && val !== '' && typeof val === 'string') {
+          filterConditions[key] = Number(val);
+        } else {
+          filterConditions[key] = val;
+        }
+      }
+      where = {
+        ...where,
+        ...filterConditions,
+      };
+    }
 
     const page = options.page || 1;
     const limit = options.limit || 20;
     const skip = (page - 1) * limit;
+
+    // 3. Sorting
+    let orderBy = options.orderBy;
+    if (options.sortBy) {
+      orderBy = {
+        [options.sortBy]: options.sortOrder === 'asc' ? 'asc' : 'desc',
+      };
+    } else if (!orderBy) {
+      orderBy = {
+        [this.pkField]: 'desc',
+      };
+    }
 
     const [items, total] = await Promise.all([
       delegate.findMany({
         where,
         select: options.select,
         include: options.include,
-        orderBy: options.orderBy,
+        orderBy,
         skip,
         take: limit,
       }),

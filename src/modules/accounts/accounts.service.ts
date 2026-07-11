@@ -133,14 +133,14 @@ export const AccountsService = {
     };
   },
 
-  async listLedgers() {
+  async listLedgers(options?: any) {
     return ledgerRepo.findMany({
       include: {
         ledger_bank_details: true,
         ledger_credit_settings: true,
         ledger_tax_settings: true,
       },
-      limit: 100,
+      ...options,
     });
   },
 

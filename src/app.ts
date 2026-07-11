@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { requestIdMiddleware } from './core/middleware/requestId';
 import { tenantContextMiddleware } from './core/middleware/tenantContext';
+import { idempotency } from './core/middleware/idempotency';
 import { errorHandler } from './core/middleware/errorHandler';
 import { authRoutes } from './core/auth/auth.routes';
 import { organizationRoutes } from './modules/organization/organization.routes';
@@ -54,6 +55,7 @@ const writeLimiter = rateLimit({
 // Request tracer and tenant scope injectors
 app.use(requestIdMiddleware);
 app.use(tenantContextMiddleware);
+app.use(idempotency);
 
 // Task 69: Health check endpoint
 app.get('/health', async (req, res) => {

@@ -212,6 +212,28 @@ describe('🚀 algoERP Backend Integration Tests', () => {
       data: { Item_Name: 'Item A', Group_Id: 'GRP1', Price: 100 },
     });
 
+    const seedHeader = await prisma.voucher_headers.create({
+      data: {
+        voucher_type: 'ReceiptNote',
+        voucher_prefix: 'IN',
+        voucher_no: 'IN/00001',
+        voucher_date: new Date('2026-04-01'),
+      },
+    });
+
+    await prisma.stock_ledger.create({
+      data: {
+        voucher_header_id: seedHeader.id,
+        item_id: 1,
+        godown_id: 1,
+        quantity_in: 1000,
+        quantity_out: 0,
+        unit_cost: 50,
+        total_cost: 50000,
+        posting_date: new Date('2026-04-01'),
+      },
+    });
+
     // Config settings for Sales and VAT GL accounts (ID 2 and ID 3)
     await prisma.config_settings.createMany({
       data: [
@@ -285,6 +307,30 @@ describe('🚀 algoERP Backend Integration Tests', () => {
 
       expect(res.status).toBe(403);
       expect(res.body.error.message).toContain('Forbidden');
+    });
+
+    it('should return user info, permissions, and active financial year on /auth/me', async () => {
+      const res = await request(app)
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.activeFinancialYear).toBeDefined();
+      expect(res.body.data.activeFinancialYear.fyCode).toBe('2025-26');
+      expect(res.body.data.permissions).toBeInstanceOf(Array);
+      expect(res.body.data.permissions.length).toBeGreaterThan(0);
+    });
+
+    it('should return active financial year on GET /organization/fy/active', async () => {
+      const res = await request(app)
+        .get('/organization/fy/active')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.fy_code).toBe('2025-26');
+      expect(res.body.data.is_default).toBe(true);
     });
   });
 
@@ -874,6 +920,7 @@ describe('🚀 algoERP Backend Integration Tests', () => {
           voucher_date: '2026-06-14',
           financial_year: '2025-26',
           ledger_id: 1,
+          godown_id: 1,
           return_against_id: siHeaderId,
           lines: [{ item_id: 1, quantity: 1, price: 100 }],
         });
@@ -1019,15 +1066,14 @@ describe('🚀 algoERP Backend Integration Tests', () => {
     });
 
     it('should reject editing a Posted voucher', async () => {
-      // Use a previously posted SI (id from transaction integrity test, #4)
-      const postedHeader = await prisma.voucher_headers.findFirst({
-        where: { voucher_type: 'SalesInvoice' },
+      const postedMain = await prisma.sales_invoice_main.findFirst({
+        where: { VoucherStatus: 'Posted' },
         orderBy: { id: 'asc' },
       });
-      if (!postedHeader) return;
+      if (!postedMain) return;
 
       const editRes = await request(app)
-        .put(`/transactions/sales-invoice/${postedHeader.id}`)
+        .put(`/transactions/sales-invoice/${postedMain.id}`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ narration: 'Cannot edit posted' });
       // Should return 422 or 409 (business rule: cannot edit posted voucher)
@@ -1035,27 +1081,89 @@ describe('🚀 algoERP Backend Integration Tests', () => {
     });
 
     it('should cancel a voucher and write reversing GL rows', async () => {
-      const postedHeader = await prisma.voucher_headers.findFirst({
-        where: { voucher_type: 'SalesInvoice' },
-        orderBy: { id: 'desc' },
+      const postedMain = await prisma.sales_invoice_main.findFirst({
+        where: { VoucherStatus: 'Posted' },
+        orderBy: { id: 'asc' },
       });
-      if (!postedHeader) return;
+      if (!postedMain) return;
+      const postedHeaderId = postedMain.id;
 
       const journalBefore = await prisma.journal_ledger.count({
-        where: { voucher_header_id: postedHeader.id },
+        where: { voucher_header_id: postedHeaderId },
       });
 
       const cancelRes = await request(app)
-        .post(`/transactions/sales-invoice/${postedHeader.id}/cancel`)
+        .post(`/transactions/sales-invoice/${postedHeaderId}/cancel`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({ reason: 'Test cancel' });
       expect([200, 204]).toContain(cancelRes.status);
 
       // Reversing entries should be written (double the original entries count)
       const journalAfter = await prisma.journal_ledger.count({
-        where: { voucher_header_id: postedHeader.id },
+        where: { voucher_header_id: postedHeaderId },
       });
       expect(journalAfter).toBeGreaterThan(journalBefore);
+    });
+  });
+
+  describe('🔍 List Endpoints Search, Filtering & Sorting', () => {
+    it('should filter, sort, and paginate ledgers list', async () => {
+      const res = await request(app)
+        .get('/accounts/ledgers?page=1&limit=5&sortBy=Ledger_Name&sortOrder=asc')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.items).toBeDefined();
+      expect(res.body.data.meta).toBeDefined();
+      expect(res.body.data.meta.page).toBe(1);
+    });
+
+    it('should search ledgers by search term', async () => {
+      const res = await request(app)
+        .get('/accounts/ledgers?search=Customer')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.items.every((i: any) => i.Ledger_Name.includes('Customer') || i.Ledger_Type.includes('Customer'))).toBe(true);
+    });
+
+    it('should filter sales invoices list by status and prefix', async () => {
+      const res = await request(app)
+        .get('/transactions/sales-invoices?status=Posted&prefix=SI')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.items).toBeDefined();
+    });
+  });
+
+  describe('🔒 Idempotency POST requests (BE-005)', () => {
+    it('should return identical cached response on duplicate POST with same Idempotency-Key', async () => {
+      const idempotencyKey = 'idemp-key-test-12345';
+      const payload = { uom_Name: 'Idemp Unit', uom_code: 'IDU' };
+
+      const res1 = await request(app)
+        .post('/inventory/uom')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('Idempotency-Key', idempotencyKey)
+        .send(payload);
+
+      expect(res1.status).toBe(201);
+      expect(res1.body.success).toBe(true);
+      const createdId = res1.body.data.id;
+
+      // Duplicate request with same key
+      const res2 = await request(app)
+        .post('/inventory/uom')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('Idempotency-Key', idempotencyKey)
+        .send(payload);
+
+      expect(res2.status).toBe(201);
+      expect(res2.body.data.id).toBe(createdId);
+      expect(res2.headers['x-cache-lookup']).toBe('HIT');
     });
   });
 });

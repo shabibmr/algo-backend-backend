@@ -12,6 +12,9 @@ export interface ListFilters {
   status?: string;
   page?: number;
   limit?: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 function parsePage(filters: ListFilters) {
@@ -33,48 +36,120 @@ function dateRange(filters: ListFilters) {
   return Object.keys(range).length ? range : undefined;
 }
 
+function getMainRelationKey(voucherType: string): string | null {
+  const map: Record<string, string> = {
+    SalesInvoice: 'sales_invoice_main',
+    PurchaseInvoice: 'purchase_invoice_main',
+    PaymentVoucher: 'payment_voucher_main',
+    ReceiptVoucher: 'receipt_voucher_main',
+    ContraVoucher: 'contra_voucher_main',
+    JournalVoucher: 'journal_voucher_main',
+    CreditNote: 'credit_note_main',
+    DebitNote: 'debit_note_main',
+    Quotation: 'quotation_main',
+    SalesOrder: 'sales_order_main',
+    PurchaseOrder: 'purchase_order_main',
+    DeliveryNote: 'delivery_note_main',
+    ReceiptNote: 'receipt_note_main',
+    GodownTransfer: 'godown_tranfer_main',
+    MaterialIn: 'material_in_main',
+    Requirement: 'requirement_main',
+    StockRequest: 'stock_request_main',
+  };
+  return map[voucherType] || null;
+}
+
 function headerWhere(voucherType: string, filters: ListFilters) {
   const where: any = { voucher_type: voucherType };
   if (filters.prefix) where.voucher_prefix = filters.prefix;
   const dr = dateRange(filters);
   if (dr) where.voucher_date = dr;
+  
+  const mainKey = getMainRelationKey(voucherType);
+  if (filters.status && mainKey) {
+    where[mainKey] = {
+      ...(where[mainKey] || {}),
+      VoucherStatus: filters.status,
+    };
+  }
+
+  if (filters.search) {
+    const searchConditions: any[] = [
+      { voucher_no: { contains: filters.search } },
+      { voucher_prefix: { contains: filters.search } },
+    ];
+    if (mainKey) {
+      searchConditions.push({
+        [mainKey]: {
+          Narration: { contains: filters.search },
+        },
+      });
+      if (voucherType === 'SalesInvoice') {
+        searchConditions.push({
+          [mainKey]: {
+            Billing_Name: { contains: filters.search },
+          },
+        });
+      }
+    }
+    where.OR = searchConditions;
+  }
   return where;
 }
 
-function mainWhere(filters: ListFilters, ledgerKey = 'voucher_ledger_id') {
-  const where: any = {};
-  const dr = dateRange(filters);
-  if (dr) where.Date_Created = dr;
-  if (filters.ledger_id) where[ledgerKey] = filters.ledger_id;
-  if (filters.status) where.VoucherStatus = filters.status;
-  return where;
+function getOrderBy(voucherType: string, filters: ListFilters): any {
+  if (filters.sortBy) {
+    const direction = filters.sortOrder === 'asc' ? 'asc' : 'desc';
+    if (['voucher_no', 'voucher_date', 'voucher_prefix'].includes(filters.sortBy)) {
+      return { [filters.sortBy]: direction };
+    }
+    const mainKey = getMainRelationKey(voucherType);
+    if (mainKey) {
+      return {
+        [mainKey]: {
+          [filters.sortBy]: direction,
+        },
+      };
+    }
+  }
+  return { voucher_date: 'desc' };
 }
 
 function paginateMeta(total: number, page: number, limit: number) {
   return { total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
+async function genericList(voucherType: string, relationKey: string, filters: ListFilters) {
+  const { page, limit, skip } = parsePage(filters);
+  const hWhere = headerWhere(voucherType, filters);
+  
+  if (filters.ledger_id) {
+    hWhere[relationKey] = {
+      ...(hWhere[relationKey] || {}),
+      voucher_ledger_id: filters.ledger_id,
+    };
+  }
+
+  const orderBy = getOrderBy(voucherType, filters);
+
+  const [total, items] = await Promise.all([
+    prisma.voucher_headers.count({ where: hWhere }),
+    prisma.voucher_headers.findMany({
+      where: hWhere,
+      include: { [relationKey]: true },
+      orderBy,
+      skip,
+      take: limit,
+    }),
+  ]);
+  return { items, meta: paginateMeta(total, page, limit) };
+}
+
 // ─── 1. SalesInvoice ───────────────────────────────────────────────────────────
 
 export const SalesInvoiceReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('SalesInvoice', filters);
-    if (filters.ledger_id) {
-      hWhere.sales_invoice_main = { voucher_ledger_id: filters.ledger_id };
-    }
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { sales_invoice_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('SalesInvoice', 'sales_invoice_main', filters);
   },
 
   async getById(id: number) {
@@ -92,23 +167,7 @@ export const SalesInvoiceReadService = {
 
 export const PurchaseInvoiceReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('PurchaseInvoice', filters);
-    if (filters.ledger_id) {
-      hWhere.purchase_invoice_main = { voucher_ledger_id: filters.ledger_id };
-    }
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { purchase_invoice_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('PurchaseInvoice', 'purchase_invoice_main', filters);
   },
 
   async getById(id: number) {
@@ -126,23 +185,7 @@ export const PurchaseInvoiceReadService = {
 
 export const PaymentVoucherReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('Payment', filters);
-    if (filters.ledger_id) {
-      hWhere.payment_voucher_main = { voucher_ledger_id: filters.ledger_id };
-    }
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { payment_voucher_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('PaymentVoucher', 'payment_voucher_main', filters);
   },
 
   async getById(id: number) {
@@ -160,23 +203,7 @@ export const PaymentVoucherReadService = {
 
 export const ReceiptVoucherReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('Receipt', filters);
-    if (filters.ledger_id) {
-      hWhere.receipt_voucher_main = { voucher_ledger_id: filters.ledger_id };
-    }
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { receipt_voucher_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('ReceiptVoucher', 'receipt_voucher_main', filters);
   },
 
   async getById(id: number) {
@@ -194,23 +221,7 @@ export const ReceiptVoucherReadService = {
 
 export const ContraVoucherReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('Contra', filters);
-    if (filters.ledger_id) {
-      hWhere.contra_voucher_main = { voucher_ledger_id: filters.ledger_id };
-    }
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { contra_voucher_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('ContraVoucher', 'contra_voucher_main', filters);
   },
 
   async getById(id: number) {
@@ -228,20 +239,7 @@ export const ContraVoucherReadService = {
 
 export const JournalVoucherReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('Journal', filters);
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { journal_voucher_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('JournalVoucher', 'journal_voucher_main', filters);
   },
 
   async getById(id: number) {
@@ -259,23 +257,7 @@ export const JournalVoucherReadService = {
 
 export const CreditNoteReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('CreditNote', filters);
-    if (filters.ledger_id) {
-      hWhere.credit_note_main = { voucher_ledger_id: filters.ledger_id };
-    }
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { credit_note_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('CreditNote', 'credit_note_main', filters);
   },
 
   async getById(id: number) {
@@ -293,23 +275,7 @@ export const CreditNoteReadService = {
 
 export const DebitNoteReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('DebitNote', filters);
-    if (filters.ledger_id) {
-      hWhere.debit_note_main = { voucher_ledger_id: filters.ledger_id };
-    }
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { debit_note_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('DebitNote', 'debit_note_main', filters);
   },
 
   async getById(id: number) {
@@ -327,24 +293,7 @@ export const DebitNoteReadService = {
 
 export const QuotationReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('Quotation', filters);
-    const mainFilter: any = {};
-    if (filters.ledger_id) mainFilter.voucher_ledger_id = filters.ledger_id;
-    if (filters.status) mainFilter.VoucherStatus = filters.status;
-    if (Object.keys(mainFilter).length) hWhere.quotation_main = mainFilter;
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { quotation_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('Quotation', 'quotation_main', filters);
   },
 
   async getById(id: number) {
@@ -365,24 +314,7 @@ export const QuotationReadService = {
 
 export const SalesOrderReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('SalesOrder', filters);
-    const mainFilter: any = {};
-    if (filters.ledger_id) mainFilter.voucher_ledger_id = filters.ledger_id;
-    if (filters.status) mainFilter.VoucherStatus = filters.status;
-    if (Object.keys(mainFilter).length) hWhere.sales_order_main = mainFilter;
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { sales_order_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('SalesOrder', 'sales_order_main', filters);
   },
 
   async getById(id: number) {
@@ -400,24 +332,7 @@ export const SalesOrderReadService = {
 
 export const PurchaseOrderReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('PurchaseOrder', filters);
-    const mainFilter: any = {};
-    if (filters.ledger_id) mainFilter.voucher_ledger_id = filters.ledger_id;
-    if (filters.status) mainFilter.VoucherStatus = filters.status;
-    if (Object.keys(mainFilter).length) hWhere.purchase_order_main = mainFilter;
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { purchase_order_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('PurchaseOrder', 'purchase_order_main', filters);
   },
 
   async getById(id: number) {
@@ -435,20 +350,7 @@ export const PurchaseOrderReadService = {
 
 export const DeliveryNoteReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('DeliveryNote', filters);
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { delivery_note_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('DeliveryNote', 'delivery_note_main', filters);
   },
 
   async getById(id: number) {
@@ -466,20 +368,7 @@ export const DeliveryNoteReadService = {
 
 export const ReceiptNoteReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('ReceiptNote', filters);
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { receipt_note_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('ReceiptNote', 'receipt_note_main', filters);
   },
 
   async getById(id: number) {
@@ -497,20 +386,7 @@ export const ReceiptNoteReadService = {
 
 export const GodownTransferReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('GodownTransfer', filters);
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { godown_tranfer_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('GodownTransfer', 'godown_tranfer_main', filters);
   },
 
   async getById(id: number) {
@@ -528,20 +404,7 @@ export const GodownTransferReadService = {
 
 export const MaterialInReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('MaterialIn', filters);
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { material_in_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('MaterialIn', 'material_in_main', filters);
   },
 
   async getById(id: number) {
@@ -559,20 +422,7 @@ export const MaterialInReadService = {
 
 export const RequirementReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('Requirement', filters);
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { requirement_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('Requirement', 'requirement_main', filters);
   },
 
   async getById(id: number) {
@@ -590,23 +440,7 @@ export const RequirementReadService = {
 
 export const StockRequestReadService = {
   async list(filters: ListFilters) {
-    const { page, limit, skip } = parsePage(filters);
-    const hWhere = headerWhere('StockRequest', filters);
-    const mainFilter: any = {};
-    if (filters.status) mainFilter.VoucherStatus = filters.status;
-    if (Object.keys(mainFilter).length) hWhere.stock_request_main = mainFilter;
-
-    const [total, items] = await Promise.all([
-      prisma.voucher_headers.count({ where: hWhere }),
-      prisma.voucher_headers.findMany({
-        where: hWhere,
-        include: { stock_request_main: true },
-        orderBy: { voucher_date: 'desc' },
-        skip,
-        take: limit,
-      }),
-    ]);
-    return { items, meta: paginateMeta(total, page, limit) };
+    return genericList('StockRequest', 'stock_request_main', filters);
   },
 
   async getById(id: number) {

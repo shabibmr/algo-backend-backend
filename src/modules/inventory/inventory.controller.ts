@@ -20,13 +20,37 @@ import {
   StockLedgerService,
 } from './inventory.service';
 
+
+function getQueryOptions(req) {
+  const page = req.query.page ? Number(req.query.page) : undefined;
+  const limit = req.query.limit ? Number(req.query.limit) : undefined;
+  const search = req.query.search ? String(req.query.search) : undefined;
+  const sortBy = req.query.sortBy ? String(req.query.sortBy) : undefined;
+  const sortOrder = req.query.sortOrder === 'asc' ? 'asc' : 'desc';
+
+  const filters = {};
+  const reservedKeys = ['page', 'limit', 'search', 'sortBy', 'sortOrder'];
+  for (const [key, val] of Object.entries(req.query)) {
+    if (!reservedKeys.includes(key) && val !== undefined && val !== '') {
+      filters[key] = val;
+    }
+  }
+
+  return {
+    page,
+    limit,
+    search,
+    sortBy,
+    sortOrder,
+    filters: Object.keys(filters).length ? filters : undefined,
+  };
+}
+
 export const InventoryController = {
   // ── UOM Controllers ─────────────────────────────────────────
   async listUoms(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await UomService.listUoms({ page, limit });
+      const result = await UomService.listUoms(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -105,9 +129,7 @@ export const InventoryController = {
   // ── Brand Controllers ────────────────────────────────────────
   async listBrands(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await BrandService.listBrands({ page, limit });
+      const result = await BrandService.listBrands(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -186,9 +208,7 @@ export const InventoryController = {
   // ── Category Controllers ─────────────────────────────────────
   async listCategories(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await CategoryService.listCategories({ page, limit });
+      const result = await CategoryService.listCategories(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -267,9 +287,7 @@ export const InventoryController = {
   // ── Tax Category Controllers ──────────────────────────────────
   async listTaxCategories(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await TaxCategoryService.listTaxCategories({ page, limit });
+      const result = await TaxCategoryService.listTaxCategories(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -515,9 +533,7 @@ export const InventoryController = {
   // ── SKUMaster Controllers ──────────────────────────────────
   async listSkus(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await SKUMasterService.listSkus({ page, limit });
+      const result = await SKUMasterService.listSkus(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -596,9 +612,7 @@ export const InventoryController = {
   // ── ItemBatch Controllers ──────────────────────────────────
   async listBatches(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await ItemBatchService.listBatches({ page, limit });
+      const result = await ItemBatchService.listBatches(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -677,9 +691,7 @@ export const InventoryController = {
   // ── ItemProperty Controllers ────────────────────────────────
   async listProperties(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await ItemPropertyService.listProperties({ page, limit });
+      const result = await ItemPropertyService.listProperties(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -741,9 +753,7 @@ export const InventoryController = {
   // ── ItemImage Controllers ───────────────────────────────────
   async listImages(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await ItemImageService.listImages({ page, limit });
+      const result = await ItemImageService.listImages(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -808,9 +818,7 @@ export const InventoryController = {
   // ── Ingredient (Recipe / BOM) Controllers ─────────────────────
   async listIngredients(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await IngredientService.listIngredients({ page, limit });
+      const result = await IngredientService.listIngredients(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -919,9 +927,7 @@ export const InventoryController = {
   // ── Godown Controllers ───────────────────────────────────────
   async listGodowns(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await GodownService.listGodowns({ page, limit });
+      const result = await GodownService.listGodowns(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -1000,9 +1006,7 @@ export const InventoryController = {
   // ── UOM Conversion Controllers ──────────────────────────────
   async listConversions(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await UOMConversionService.listConversions({ page, limit });
+      const result = await UOMConversionService.listConversions(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -1103,9 +1107,7 @@ export const InventoryController = {
   // ── PriceList Controllers ───────────────────────────────────
   async listPriceLists(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await PriceListService.listPriceLists({ page, limit });
+      const result = await PriceListService.listPriceLists(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -1269,9 +1271,7 @@ export const InventoryController = {
   // ── Route Controllers ────────────────────────────────────────
   async listRoutes(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await RouteService.listRoutes({ page, limit });
+      const result = await RouteService.listRoutes(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -1350,9 +1350,7 @@ export const InventoryController = {
   // RouteCustomerMapping Controllers
   async listCustomerMappings(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await RouteService.listCustomerMappings({ page, limit });
+      const result = await RouteService.listCustomerMappings(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -1399,9 +1397,7 @@ export const InventoryController = {
   // RouteMapping (Salesman assignments) Controllers
   async listRouteMappings(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await RouteService.listRouteMappings({ page, limit });
+      const result = await RouteService.listRouteMappings(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -1478,9 +1474,7 @@ export const InventoryController = {
   // ── LedgerItemMapping Controllers ─────────────────────────────
   async listLedgerItemMappings(req: Request, res: Response, next: NextFunction) {
     try {
-      const page = req.query.page ? Number(req.query.page) : undefined;
-      const limit = req.query.limit ? Number(req.query.limit) : undefined;
-      const result = await LedgerItemMappingService.listMappings({ page, limit });
+      const result = await LedgerItemMappingService.listMappings(getQueryOptions(req));
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
