@@ -40,6 +40,7 @@ router.put(
 // ── Financial Year ───────────────────────────────────────────
 router.get('/fy', authorize('FinancialYear', 'read'), OrganizationController.listFinancialYears);
 router.get('/fy/active', authorize('FinancialYear', 'read'), OrganizationController.getActiveFinancialYear);
+router.get('/fy/:id', authorize('FinancialYear', 'read'), OrganizationController.getFinancialYear);
 router.post(
   '/fy',
   authorize('FinancialYear', 'create'),

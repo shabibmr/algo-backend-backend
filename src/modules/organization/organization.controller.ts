@@ -57,6 +57,15 @@ export const OrganizationController = {
     }
   },
 
+  async getFinancialYear(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await OrganizationService.getFinancialYear(Number(req.params.id));
+      return res.status(200).json({ success: true, data, requestId: req.requestId });
+    } catch (err) {
+      return next(err);
+    }
+  },
+
   async getActiveFinancialYear(req: Request, res: Response, next: NextFunction) {
     try {
       const companyId = req.query.companyId ? Number(req.query.companyId) : req.user?.companyId;

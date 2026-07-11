@@ -20,6 +20,10 @@ import { ConfigSettingService } from '../../core/services/ConfigSettingService';
 import { ConflictError, NotFoundError, ValidationError } from '../../core/errors/AppError';
 import { hashPassword } from '../../core/auth/password';
 import { clearPermissionCache } from '../../core/middleware/authorize';
+import {
+  ADMIN_BOOTSTRAP_MODULES,
+  ADMIN_ROLE_NAME,
+} from '../../core/permissions/adminModules';
 import { ListQueryOptions } from '../../core/utils/listQuery';
 
 const companyRepo = new CompanyProfileRepository();
@@ -57,6 +61,12 @@ export const OrganizationService = {
       orderBy: { start_date: 'desc' },
       limit: 100,
     });
+  },
+
+  async getFinancialYear(id: number) {
+    const fy = await fyRepo.findById(id);
+    if (!fy) throw new NotFoundError('Financial year not found');
+    return fy;
   },
 
   async getActiveFinancialYear(companyId: number) {
@@ -798,31 +808,10 @@ export const OrganizationService = {
 
       // 8. Admin Role + User
       const adminRole = await tx.user_roles.create({
-        data: { role_name: 'Administrator', description: 'Full system access' },
+        data: { role_name: ADMIN_ROLE_NAME, description: 'Full system access' },
       });
 
-      const MODULES = [
-        'CompanyProfile',
-        'FinancialYear',
-        'Branch',
-        'Currency',
-        'CurrencyRate',
-        'VoucherSeries',
-        'AddressBook',
-        'ExtraValues',
-        'AuditLog',
-        'UserRole',
-        'UserAccessPermission',
-        'UserCredentials',
-        'ConfigSetting',
-        'ProjectMaster',
-        'ErrorReporting',
-        'Accounts',
-        'Transactions',
-        'Inventory',
-        'Employee',
-      ];
-      for (const mod of MODULES) {
+      for (const mod of ADMIN_BOOTSTRAP_MODULES) {
         await tx.user_access_permissions.create({
           data: {
             role_id: adminRole.id,
