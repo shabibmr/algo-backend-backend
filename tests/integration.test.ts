@@ -1166,4 +1166,77 @@ describe('🚀 algoERP Backend Integration Tests', () => {
       expect(res2.headers['x-cache-lookup']).toBe('HIT');
     });
   });
+
+  describe('🔍 Lookup / Projection Endpoints (BE-008)', () => {
+    it('should query brand lookup and return slim format', async () => {
+      await prisma.brands.create({ data: { Brand_Name: 'LookupBrandTest' } });
+
+      const res = await request(app)
+        .get('/inventory/brand/lookup?search=LookupBrandTest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toBeInstanceOf(Array);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0]).toHaveProperty('id');
+      expect(res.body.data[0]).toHaveProperty('label');
+      expect(res.body.data[0].label).toBe('LookupBrandTest');
+      expect(res.body.data[0]).not.toHaveProperty('Brand_Description');
+    });
+
+    it('should query category lookup and return slim format', async () => {
+      await prisma.category.create({ data: { category_name: 'LookupCatTest', category_code: 'LCT' } });
+
+      const res = await request(app)
+        .get('/inventory/category/lookup?search=LookupCatTest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toBeInstanceOf(Array);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0]).toHaveProperty('id');
+      expect(res.body.data[0]).toHaveProperty('label');
+      expect(res.body.data[0]).toHaveProperty('code');
+      expect(res.body.data[0].label).toBe('LookupCatTest');
+      expect(res.body.data[0].code).toBe('LCT');
+    });
+
+    it('should query godown lookup and return slim format', async () => {
+      await prisma.godown.create({ data: { Godown_Name: 'LookupGodownTest', godown_code: 'LGT' } });
+
+      const res = await request(app)
+        .get('/inventory/godown/lookup?search=LookupGodownTest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toBeInstanceOf(Array);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0]).toHaveProperty('id');
+      expect(res.body.data[0]).toHaveProperty('label');
+      expect(res.body.data[0]).toHaveProperty('code');
+      expect(res.body.data[0].label).toBe('LookupGodownTest');
+      expect(res.body.data[0].code).toBe('LGT');
+    });
+
+    it('should query employee lookup and return slim format', async () => {
+      await prisma.employee_details.create({ data: { Name: 'LookupEmployeeTest', employee_code: 'LET' } });
+
+      const res = await request(app)
+        .get('/employee/employees/lookup?search=LookupEmployeeTest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toBeInstanceOf(Array);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0]).toHaveProperty('id');
+      expect(res.body.data[0]).toHaveProperty('label');
+      expect(res.body.data[0]).toHaveProperty('code');
+      expect(res.body.data[0].label).toBe('LookupEmployeeTest');
+      expect(res.body.data[0].code).toBe('LET');
+    });
+  });
 });

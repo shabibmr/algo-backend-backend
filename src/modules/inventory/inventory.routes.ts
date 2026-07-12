@@ -49,6 +49,7 @@ router.delete('/uom/:id', authorize('Inventory', 'delete'), InventoryController.
 
 // ── Brand Routes ────────────────────────────────────────────
 router.get('/brand', authorize('Inventory', 'read'), InventoryController.listBrands);
+router.get('/brand/lookup', authorize('Inventory', 'read'), InventoryController.lookupBrands);
 router.get('/brand/:id', authorize('Inventory', 'read'), InventoryController.getBrand);
 router.post(
   '/brand',
@@ -66,6 +67,7 @@ router.delete('/brand/:id', authorize('Inventory', 'delete'), InventoryControlle
 
 // ── Category Routes ─────────────────────────────────────────
 router.get('/category', authorize('Inventory', 'read'), InventoryController.listCategories);
+router.get('/category/lookup', authorize('Inventory', 'read'), InventoryController.lookupCategories);
 router.get('/category/:id', authorize('Inventory', 'read'), InventoryController.getCategory);
 router.post(
   '/category',
@@ -242,6 +244,7 @@ router.delete(
 
 // ── Godown Routes ───────────────────────────────────────────
 router.get('/godown', authorize('Inventory', 'read'), InventoryController.listGodowns);
+router.get('/godown/lookup', authorize('Inventory', 'read'), InventoryController.lookupGodowns);
 router.get('/godown/:id', authorize('Inventory', 'read'), InventoryController.getGodown);
 router.post(
   '/godown',

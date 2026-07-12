@@ -188,6 +188,21 @@ export const EmployeeController = {
     }
   },
 
+  async lookupEmployees(req: Request, res: Response, next: NextFunction) {
+    try {
+      const search = req.query.search ? String(req.query.search) : undefined;
+      const result = await EmployeeService.lookupEmployees(search);
+      const response: ApiResponse<typeof result> = {
+        success: true,
+        data: result,
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
   async getEmployee(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;

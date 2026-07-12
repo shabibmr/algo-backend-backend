@@ -22,10 +22,11 @@ export class CompanyProfileRepository extends BaseRepository<companyprofile> {
     super({
       modelName: 'companyprofile',
       primaryKeyField: 'id',
-      softDeleteField: 'is_active',
+      // companyprofile has no is_active / updated_at columns (Prisma schema).
+      softDeleteField: null,
       searchFields: ['Company_Name', 'Branch', 'TRN'],
       auditFieldMap: {
-        lastModified: 'updated_at',
+        lastModified: null,
       },
     });
   }

@@ -127,11 +127,14 @@ export const leavePolicySchema = z.object({
 
 export const leaveAllocationSchema = z.object({
   body: z.object({
+    // Required by LeaveService.allocateLeave — was stripped by Zod before this fix.
+    employee_id: z.number().int(),
     leave_policy_id: z.number().int(),
     year: z.number().int(),
     allocated_days: z.number().nonnegative(),
     carried_forward: z.number().nonnegative().default(0),
-    used_days: z.number().nonnegative().default(0),
+    // Service always stores used_days as 0 on create; accept but ignore client value.
+    used_days: z.number().nonnegative().default(0).optional(),
   }),
 });
 

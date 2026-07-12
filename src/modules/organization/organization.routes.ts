@@ -91,7 +91,18 @@ router.delete(
 ); // task 29
 
 // ── Currency Rates ───────────────────────────────────────────
+// Lookup by currency+date (query). List/history must be registered before /:id.
 router.get('/rates', authorize('CurrencyRate', 'read'), OrganizationController.getExchangeRate);
+router.get(
+  '/rates/history',
+  authorize('CurrencyRate', 'read'),
+  OrganizationController.listExchangeRates,
+);
+router.get(
+  '/rates/:id',
+  authorize('CurrencyRate', 'read'),
+  OrganizationController.getExchangeRateById,
+);
 router.post(
   '/rates',
   authorize('CurrencyRate', 'create'),
@@ -188,6 +199,11 @@ router.post(
 );
 router.put('/roles/:roleId', authorize('UserRole', 'update'), OrganizationController.updateRole); // task 32
 router.delete('/roles/:roleId', authorize('UserRole', 'delete'), OrganizationController.deleteRole); // task 32
+router.get(
+  '/roles/:roleId/permissions',
+  authorize('UserAccessPermission', 'read'),
+  OrganizationController.getRolePermissions,
+);
 router.put(
   '/roles/:roleId/permissions',
   authorize('UserAccessPermission', 'update'),

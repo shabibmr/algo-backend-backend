@@ -117,6 +117,21 @@ export const InventoryController = {
     }
   },
 
+  async lookupBrands(req: Request, res: Response, next: NextFunction) {
+    try {
+      const search = req.query.search ? String(req.query.search) : undefined;
+      const result = await BrandService.lookupBrands(search);
+      const response: ApiResponse<typeof result> = {
+        success: true,
+        data: result,
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
   async getBrand(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
@@ -185,6 +200,21 @@ export const InventoryController = {
   async listCategories(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await CategoryService.listCategories(getQueryOptions(req));
+      const response: ApiResponse<typeof result> = {
+        success: true,
+        data: result,
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
+  async lookupCategories(req: Request, res: Response, next: NextFunction) {
+    try {
+      const search = req.query.search ? String(req.query.search) : undefined;
+      const result = await CategoryService.lookupCategories(search);
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,
@@ -916,6 +946,21 @@ export const InventoryController = {
   async listGodowns(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await GodownService.listGodowns(getQueryOptions(req));
+      const response: ApiResponse<typeof result> = {
+        success: true,
+        data: result,
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
+  async lookupGodowns(req: Request, res: Response, next: NextFunction) {
+    try {
+      const search = req.query.search ? String(req.query.search) : undefined;
+      const result = await GodownService.lookupGodowns(search);
       const response: ApiResponse<typeof result> = {
         success: true,
         data: result,

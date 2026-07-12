@@ -355,6 +355,7 @@ export const VoucherPostingService = {
             voucher_header_id: header.id,
             item_id: line.item_id,
             sku_id: line.sku_id || null,
+            batch_id: line.batch_id || null,
             godown_id: payload.godown_id,
             quantity_in: new Prisma.Decimal(0),
             quantity_out: new Prisma.Decimal(line.quantity),
@@ -419,6 +420,190 @@ export const VoucherPostingService = {
         vat: taxSum.toNumber(),
       };
     });
+  },
+
+  /**
+   * Book GL + stock + billwise for an existing Sales Invoice that was saved as
+   * Draft (or Approved without posting). Idempotent: no-ops if journal rows
+   * already exist for this voucher_header_id.
+   *
+   * Used by VoucherApprovalService when advancing Draft/Approved → Posted.
+   */
+  async bookSalesInvoiceIfUnposted(
+    tx: Prisma.TransactionClient,
+    id: number,
+    user: string,
+  ): Promise<{ booked: boolean }> {
+    const existingJl = await tx.journal_ledger.count({
+      where: { voucher_header_id: id },
+    });
+    if (existingJl > 0) {
+      return { booked: false };
+    }
+
+    const main = await tx.sales_invoice_main.findUnique({ where: { id } });
+    if (!main) {
+      throw new NotFoundError(`SalesInvoice #${id} not found`);
+    }
+    const header = await tx.voucher_headers.findUnique({ where: { id } });
+    if (!header) {
+      throw new NotFoundError(`Voucher header #${id} not found`);
+    }
+    const details = await tx.sales_invoice_details.findMany({
+      where: { voucher_id: id },
+    });
+    if (!details.length) {
+      throw new ValidationError('Cannot post Sales Invoice with no lines');
+    }
+
+    await assertDateNotInLockedFY(header.voucher_date);
+
+    const godownId = main.godown_id;
+    const customerLedgerId = main.voucher_ledger_id;
+    if (!godownId || !customerLedgerId) {
+      throw new ValidationError(
+        'Sales Invoice is missing godown_id or voucher_ledger_id; cannot book',
+      );
+    }
+
+    const grossTotal = toDecimal(main.Gross_Total ?? main.Total ?? 0);
+    const taxSum = toDecimal(main.Vat_Amount ?? 0);
+    const voucherNo =
+      main.Voucher_No_Display ||
+      `${header.voucher_prefix}${header.voucher_no}`;
+    const voucherDate = header.voucher_date;
+    const narration = main.Narration || `Sales Invoice ${voucherNo}`;
+
+    // Stock availability
+    for (const line of details) {
+      if (line.item_id != null && line.Quantity != null) {
+        await StockLedgerService.assertStockAvailable(
+          line.item_id,
+          godownId,
+          Number(line.Quantity),
+        );
+      }
+    }
+
+    await assertCreditLimitOk(customerLedgerId, Number(grossTotal), tx);
+
+    const salesLedgerId = await ConfigSettingService.get('SALES_LEDGER_ID', 2);
+    const taxLedgerId = await ConfigSettingService.get('TAX_LEDGER_ID', 3);
+
+    const journalEntries: Array<{
+      voucher_header_id: number;
+      ledger_id: number;
+      debit_amount: Prisma.Decimal;
+      credit_amount: Prisma.Decimal;
+      posting_date: Date;
+      narration: string;
+    }> = [
+      {
+        voucher_header_id: id,
+        ledger_id: customerLedgerId,
+        debit_amount: grossTotal as any,
+        credit_amount: toDecimal(0) as any,
+        posting_date: voucherDate,
+        narration,
+      },
+      {
+        voucher_header_id: id,
+        ledger_id: salesLedgerId,
+        debit_amount: toDecimal(0) as any,
+        credit_amount: sub(grossTotal, taxSum) as any,
+        posting_date: voucherDate,
+        narration: `Sales ${voucherNo}`,
+      },
+    ];
+
+    if (taxSum.greaterThan(0)) {
+      journalEntries.push({
+        voucher_header_id: id,
+        ledger_id: taxLedgerId,
+        debit_amount: toDecimal(0) as any,
+        credit_amount: taxSum as any,
+        posting_date: voucherDate,
+        narration: `Output VAT for ${voucherNo}`,
+      });
+    }
+
+    const sumDebits = sum(journalEntries.map((e) => e.debit_amount));
+    const sumCredits = sum(journalEntries.map((e) => e.credit_amount));
+    if (!sumDebits.equals(sumCredits)) {
+      throw new ValidationError(
+        `Double entry imbalance: Debits (${sumDebits}) != Credits (${sumCredits})`,
+      );
+    }
+
+    await tx.journal_ledger.createMany({
+      data: journalEntries.map((e) => ({
+        voucher_header_id: e.voucher_header_id,
+        ledger_id: e.ledger_id,
+        debit_amount: e.debit_amount,
+        credit_amount: e.credit_amount,
+        posting_date: e.posting_date,
+        narration: e.narration,
+      })),
+    });
+
+    await tx.stock_ledger.createMany({
+      data: details
+        .filter((line) => line.item_id != null)
+        .map((line) => ({
+          voucher_header_id: id,
+          item_id: line.item_id!,
+          sku_id: line.voucher_sku_id || null,
+          godown_id: godownId,
+          quantity_in: new Prisma.Decimal(0),
+          quantity_out: new Prisma.Decimal(Number(line.Quantity) || 0),
+          unit_cost: new Prisma.Decimal(Number(line.Price) || 0),
+          total_cost: new Prisma.Decimal(
+            (Number(line.Quantity) || 0) * (Number(line.Price) || 0),
+          ),
+          posting_date: voucherDate,
+        })),
+    });
+
+    const existingBill = await tx.billwise_records.findFirst({
+      where: {
+        VoucherType: 'SalesInvoice',
+        VoucherNo: header.voucher_no,
+        voucherPrefix: header.voucher_prefix,
+      },
+    });
+    if (!existingBill) {
+      await tx.billwise_records.create({
+        data: {
+          voucherPrefix: header.voucher_prefix,
+          VoucherType: 'SalesInvoice',
+          VoucherNo: header.voucher_no,
+          LedgerID: String(customerLedgerId),
+          RefType: 'New Ref',
+          RefNo: header.voucher_no,
+          RefPrefix: header.voucher_prefix,
+          DebitAmount: Number(grossTotal),
+          CreditAmount: 0,
+          VoucherDate: voucherDate,
+          Due_Date: new Date(voucherDate.getTime() + 30 * 24 * 60 * 60 * 1000),
+        },
+      });
+    }
+
+    await auditService.log(
+      'APPROVE',
+      'SUCCESS',
+      {
+        voucherNo,
+        total: Number(grossTotal),
+        message: 'Sales Invoice booked on approve (Draft→Posted)',
+        id,
+        user,
+      },
+      user,
+      tx,
+    );
+
+    return { booked: true };
   },
 
   /**
@@ -1591,5 +1776,14 @@ export const VoucherPostingService = {
     });
   },
 };
+
+/** Named export for lifecycle approve → Posted booking. */
+export async function bookSalesInvoiceIfUnposted(
+  tx: Prisma.TransactionClient,
+  id: number,
+  user: string,
+) {
+  return VoucherPostingService.bookSalesInvoiceIfUnposted(tx, id, user);
+}
 
 export default VoucherPostingService;

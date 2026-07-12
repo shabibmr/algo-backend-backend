@@ -79,6 +79,18 @@ export const BrandService = {
   async listBrands(options: any) {
     return brandRepo.findMany(options);
   },
+  // Slim (id, label) projection for FK pickers
+  async lookupBrands(search?: string) {
+    const result = await brandRepo.findMany({
+      search,
+      limit: 50,
+      select: { id: true, Brand_Name: true },
+    });
+    return result.items.map((b: any) => ({
+      id: b.id,
+      label: b.Brand_Name,
+    }));
+  },
   async getBrand(id: number) {
     const brand = await brandRepo.findById(id);
     if (!brand) throw new NotFoundError('Brand not found');
@@ -109,6 +121,19 @@ export const BrandService = {
 export const CategoryService = {
   async listCategories(options: any) {
     return categoryRepo.findMany(options);
+  },
+  // Slim (id, label, code) projection for FK pickers
+  async lookupCategories(search?: string) {
+    const result = await categoryRepo.findMany({
+      search,
+      limit: 50,
+      select: { id: true, category_name: true, category_code: true },
+    });
+    return result.items.map((c: any) => ({
+      id: c.id,
+      label: c.category_name || '',
+      code: c.category_code || '',
+    }));
   },
   async getCategory(id: number) {
     const cat = await categoryRepo.findById(id);
@@ -644,6 +669,19 @@ export const IngredientService = {
 export const GodownService = {
   async listGodowns(options: any) {
     return godownRepo.findMany(options);
+  },
+  // Slim (id, label, code) projection for FK pickers
+  async lookupGodowns(search?: string) {
+    const result = await godownRepo.findMany({
+      search,
+      limit: 50,
+      select: { id: true, Godown_Name: true, godown_code: true },
+    });
+    return result.items.map((g: any) => ({
+      id: g.id,
+      label: g.Godown_Name,
+      code: g.godown_code || '',
+    }));
   },
 
   async getGodown(id: number) {

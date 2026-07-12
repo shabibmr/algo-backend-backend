@@ -66,6 +66,7 @@ router.delete(
 
 // ── EmployeeDetails Routes ─────────────────────────────────────
 router.get('/employees', authorize('Employee', 'read'), EmployeeController.listEmployees);
+router.get('/employees/lookup', authorize('Employee', 'read'), EmployeeController.lookupEmployees);
 router.get('/employees/:id', authorize('Employee', 'read'), EmployeeController.getEmployee);
 router.post(
   '/employees',

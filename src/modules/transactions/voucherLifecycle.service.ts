@@ -6,12 +6,17 @@
  *  - Edit   : only Draft vouchers; no GL/stock because Draft hasn't posted them.
  *  - Cancel : only Posted vouchers; reverses GL + Stock, records Amendment linkage.
  *  - Approve: Draft → Posted (checks VoucherSeries.require_approval).
+ *             For SalesInvoice, advancing to Posted also books GL+stock if
+ *             the invoice was created as Draft (idempotent).
  *  - Reject : Draft or Approved → Rejected (sets reason + audit).
  */
 import { prisma } from '../../core/db/prisma';
 import { NotFoundError, ValidationError, ConflictError } from '../../core/errors/AppError';
 import { auditService } from '../../core/audit/auditService';
-import { assertDateNotInLockedFY } from './voucherPosting.service';
+import {
+  assertDateNotInLockedFY,
+  bookSalesInvoiceIfUnposted,
+} from './voucherPosting.service';
 import { Prisma } from '@prisma/client';
 
 // ─── Type → model mapping ────────────────────────────────────────────────────
@@ -386,6 +391,17 @@ export const VoucherApprovalService = {
     }
 
     return prisma.$transaction(async (tx) => {
+      let booked = false;
+      // Book SI GL/stock when first reaching Posted from Draft/Approved.
+      if (
+        normalizedType === 'SalesInvoice' &&
+        nextStatus === 'Posted' &&
+        row.VoucherStatus !== 'Posted'
+      ) {
+        const result = await bookSalesInvoiceIfUnposted(tx, id, username);
+        booked = result.booked;
+      }
+
       await delegate(meta.mainModel, tx).update({
         where: { id },
         data: { VoucherStatus: nextStatus },
@@ -394,12 +410,26 @@ export const VoucherApprovalService = {
       await auditService.log(
         'APPROVE',
         'SUCCESS',
-        { type: normalizedType, id, previousStatus: row.VoucherStatus, newStatus: nextStatus },
+        {
+          type: normalizedType,
+          id,
+          previousStatus: row.VoucherStatus,
+          newStatus: nextStatus,
+          booked,
+        },
         userId || username,
         tx,
       );
 
-      return { id, type: normalizedType, status: nextStatus, message: `Voucher status updated to ${nextStatus}` };
+      return {
+        id,
+        type: normalizedType,
+        status: nextStatus,
+        booked,
+        message: booked
+          ? `Voucher posted and booked (${nextStatus})`
+          : `Voucher status updated to ${nextStatus}`,
+      };
     });
   },
 

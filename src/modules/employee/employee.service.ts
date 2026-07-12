@@ -234,6 +234,20 @@ export const EmployeeService = {
     });
   },
 
+  // Slim (id, label, code) projection for FK pickers
+  async lookupEmployees(search?: string) {
+    const result = await employeeRepo.findMany({
+      search,
+      limit: 50,
+      select: { id: true, Name: true, employee_code: true },
+    });
+    return result.items.map((emp: any) => ({
+      id: emp.id,
+      label: emp.Name,
+      code: emp.employee_code || '',
+    }));
+  },
+
   async createEmployee(payload: any, user?: string) {
     const { bankDetails, salaryDetails, ...employeeData } = payload;
 

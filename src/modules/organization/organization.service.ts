@@ -44,14 +44,80 @@ const errorRepo = new ErrorReportingRepository();
 export const OrganizationService = {
   // ── Company Profile ──────────────────────────────────────────
   async getCompanyProfile(id: number) {
-    const company = await companyRepo.findById(id);
+    // Omit Logo blob — binary upload is out of band for the text form.
+    const company = await companyRepo.findById(id, {
+      select: {
+        id: true,
+        Company_Name: true,
+        Branch: true,
+        AddressLine: true,
+        Email: true,
+        Phone_Number: true,
+        WebSite: true,
+        TRN: true,
+        Manager_Name: true,
+        Currency: true,
+        Currency_Decimal: true,
+        Bill_Tag_Line: true,
+        City: true,
+        Country: true,
+        LedgerId: true,
+        Location: true,
+        Building: true,
+        POBox: true,
+        Street: true,
+        Fax: true,
+        Date_Of_Establishment: true,
+        Mobile_Number: true,
+        Notes: true,
+        License_Number: true,
+        Installation_Date: true,
+        To_Mail_Addresses: true,
+        FssaiLicense: true,
+        UseBom: true,
+        Bank_Details: true,
+      },
+    });
     if (!company) throw new NotFoundError('Company profile not found');
     return company;
   },
 
   async updateCompanyProfile(id: number, data: any, user?: string) {
     await this.getCompanyProfile(id);
-    return companyRepo.update(id, data, { user });
+    // companyProfileSchema uses snake_case; Prisma columns are PascalCase.
+    const mapped: Record<string, unknown> = {};
+    const map: Record<string, string> = {
+      company_name: 'Company_Name',
+      branch: 'Branch',
+      trn: 'TRN',
+      license_number: 'License_Number',
+      fssai_license: 'FssaiLicense',
+      email: 'Email',
+      phone_number: 'Phone_Number',
+      mobile_number: 'Mobile_Number',
+      website: 'WebSite',
+      building: 'Building',
+      street: 'Street',
+      address_line: 'AddressLine',
+      city: 'City',
+      country: 'Country',
+      po_box: 'POBox',
+      location: 'Location',
+      currency: 'Currency',
+      currency_decimal: 'Currency_Decimal',
+    };
+    for (const [from, to] of Object.entries(map)) {
+      if (data[from] !== undefined) mapped[to] = data[from];
+    }
+    return companyRepo.update(id, mapped, { user });
+  },
+
+  async getRolePermissions(roleId: number) {
+    await this.getRole(roleId);
+    return prisma.user_access_permissions.findMany({
+      where: { role_id: roleId },
+      orderBy: { module_name: 'asc' },
+    });
   },
 
   // ── Financial Year ───────────────────────────────────────────
@@ -229,6 +295,19 @@ export const OrganizationService = {
         rate_date: date,
       },
     });
+  },
+
+  async listExchangeRates(options: ListQueryOptions) {
+    return rateRepo.findMany({
+      orderBy: options.sortBy ? undefined : { rate_date: 'desc' },
+      ...options,
+    });
+  },
+
+  async getExchangeRateById(id: number) {
+    const row = await rateRepo.findById(id);
+    if (!row) throw new NotFoundError('Exchange rate not found');
+    return row;
   },
 
   async createExchangeRate(data: any, user?: string) {
@@ -561,7 +640,42 @@ export const OrganizationService = {
   // ── Task 35: CompanyProfile list ─────────────────────────────
   async listCompanyProfiles() {
     // Reference data — always return the full list, not a paginated page.
-    return companyRepo.findMany({ orderBy: { id: 'asc' }, limit: 1000 });
+    // Omit Logo (MediumBlob) so list JSON stays serializable and small.
+    return companyRepo.findMany({
+      orderBy: { id: 'asc' },
+      limit: 1000,
+      select: {
+        id: true,
+        Company_Name: true,
+        Branch: true,
+        AddressLine: true,
+        Email: true,
+        Phone_Number: true,
+        WebSite: true,
+        TRN: true,
+        Manager_Name: true,
+        Currency: true,
+        Currency_Decimal: true,
+        Bill_Tag_Line: true,
+        City: true,
+        Country: true,
+        LedgerId: true,
+        Location: true,
+        Building: true,
+        POBox: true,
+        Street: true,
+        Fax: true,
+        Date_Of_Establishment: true,
+        Mobile_Number: true,
+        Notes: true,
+        License_Number: true,
+        Installation_Date: true,
+        To_Mail_Addresses: true,
+        FssaiLicense: true,
+        UseBom: true,
+        Bank_Details: true,
+      },
+    });
   },
 
   // ── Task 36: ProjectMaster CRUD ──────────────────────────────

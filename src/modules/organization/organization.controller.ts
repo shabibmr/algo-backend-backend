@@ -236,6 +236,34 @@ export const OrganizationController = {
     }
   },
 
+  async listExchangeRates(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await OrganizationService.listExchangeRates(getQueryOptions(req));
+      const response: ApiResponse<typeof data> = {
+        success: true,
+        data,
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
+  async getExchangeRateById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await OrganizationService.getExchangeRateById(Number(req.params.id));
+      const response: ApiResponse<typeof data> = {
+        success: true,
+        data,
+        requestId: req.requestId,
+      };
+      return res.status(200).json(response);
+    } catch (err) {
+      return next(err);
+    }
+  },
+
   async createExchangeRate(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user?.username;
@@ -371,6 +399,14 @@ export const OrganizationController = {
   },
 
   // ── RBAC Admin: Permissions ──────────────────────────────────
+  async getRolePermissions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const data = await OrganizationService.getRolePermissions(Number(req.params.roleId));
+      return res.status(200).json({ success: true, data, requestId: req.requestId });
+    } catch (err) {
+      return next(err);
+    }
+  },
   async updateRolePermissions(req: Request, res: Response, next: NextFunction) {
     try {
       const { roleId } = req.params;
