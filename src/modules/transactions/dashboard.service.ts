@@ -48,6 +48,54 @@ export const DashboardService = {
       top_customers: topCustomers,
     };
   },
+
+  async getTrend(opts: { company_id?: number; branch_id?: number; months: number }) {
+    const { months } = opts;
+    const now = new Date();
+    const buckets = Array.from({ length: months }, (_, i) => {
+      const offset = months - 1 - i;
+      const start = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - offset + 1, 0);
+      return { start, end };
+    });
+
+    const points = await Promise.all(
+      buckets.map(async ({ start, end }) => {
+        const dateFilter = { gte: start, lte: end };
+        const [salesCount, purchaseCount, cashAgg, bankAgg] = await Promise.all([
+          prisma.voucher_headers.count({
+            where: { voucher_type: 'SalesInvoice', voucher_date: dateFilter },
+          }),
+          prisma.voucher_headers.count({
+            where: { voucher_type: 'PurchaseInvoice', voucher_date: dateFilter },
+          }),
+          prisma.journal_ledger.aggregate({
+            where: { posting_date: dateFilter, ledger_master: { Ledger_Type: 'Cash' } },
+            _sum: { debit_amount: true, credit_amount: true },
+          }),
+          prisma.journal_ledger.aggregate({
+            where: { posting_date: dateFilter, ledger_master: { Ledger_Type: 'Bank' } },
+            _sum: { debit_amount: true, credit_amount: true },
+          }),
+        ]);
+
+        const cashNet =
+          Number(cashAgg._sum.debit_amount ?? 0) - Number(cashAgg._sum.credit_amount ?? 0);
+        const bankNet =
+          Number(bankAgg._sum.debit_amount ?? 0) - Number(bankAgg._sum.credit_amount ?? 0);
+
+        return {
+          month: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`,
+          sales_count: salesCount,
+          purchase_count: purchaseCount,
+          cash_position: cashNet,
+          bank_position: bankNet,
+        };
+      }),
+    );
+
+    return { points };
+  },
 };
 
 // ── Task 61: Alerts service ───────────────────────────────────────────────────

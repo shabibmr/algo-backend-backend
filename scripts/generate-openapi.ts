@@ -3671,6 +3671,17 @@ addPath('/reports/dashboard', 'GET', {
   responses: { '200': { description: 'Dashboard statistics summary.' } },
 });
 
+addPath('/reports/dashboard/trend', 'GET', {
+  tags: ['Reports'],
+  summary: 'Get month-over-month dashboard trend data',
+  parameters: [
+    { name: 'company_id', in: 'query', schema: { type: 'integer' } },
+    { name: 'branch_id', in: 'query', schema: { type: 'integer' } },
+    { name: 'months', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 24, default: 6 } },
+  ],
+  responses: { '200': { description: 'Month-over-month trend points (sales/purchase counts, cash/bank position).' } },
+});
+
 addPath('/reports/alerts', 'GET', {
   tags: ['Reports'],
   summary: 'Retrieve operational alerts (document expiry, overdue bills)',

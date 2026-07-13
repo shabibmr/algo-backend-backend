@@ -35,6 +35,25 @@ router.get(
   },
 );
 
+router.get(
+  '/dashboard/trend',
+  authorize('Transactions', 'read'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const q = req.query as Record<string, string>;
+      const months = Math.min(24, Math.max(1, Number(q.months) || 6));
+      const data = await DashboardService.getTrend({
+        company_id: q.company_id ? Number(q.company_id) : undefined,
+        branch_id: q.branch_id ? Number(q.branch_id) : undefined,
+        months,
+      });
+      return res.status(200).json({ success: true, data, requestId: req.requestId });
+    } catch (err) {
+      return next(err);
+    }
+  },
+);
+
 // ── Task 61: Alerts ───────────────────────────────────────────
 router.get(
   '/alerts',
