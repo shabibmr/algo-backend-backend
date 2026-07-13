@@ -10663,6 +10663,527 @@
         }
       }
     },
+    "/reports/cash-flow-statement": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get activity-based Cash Flow Statement (Direct/Indirect)",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cash Flow Statement payload."
+          }
+        }
+      }
+    },
+    "/reports/budget-variance": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Budget vs Actual Variance report",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Budget vs Actual Variance payload."
+          }
+        }
+      }
+    },
+    "/reports/bank-reconciliation": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Bank Reconciliation Statement (BRS)",
+        "parameters": [
+          {
+            "name": "as_of_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank Reconciliation Statement payload."
+          }
+        }
+      }
+    },
+    "/reports/fixed-assets-depreciation": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Fixed Assets Gross Block & Depreciation Schedule",
+        "parameters": [
+          {
+            "name": "as_of_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fixed Assets Depreciation Schedule payload."
+          }
+        }
+      }
+    },
+    "/reports/ap-forecast": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Accounts Payable Cash Commitment Forecast",
+        "parameters": [
+          {
+            "name": "as_of_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AP Cash Forecast payload."
+          }
+        }
+      }
+    },
+    "/reports/sales-analytics": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Sales Analytics by Product Category and Segment",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sales Analytics payload."
+          }
+        }
+      }
+    },
+    "/reports/sales-margin": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Gross Margin & Profitability Analysis per Item",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sales Margin payload."
+          }
+        }
+      }
+    },
+    "/reports/quotation-conversion-ratio": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Quotation-to-Order Conversion Ratio & Win/Loss Statistics",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quotation Conversion Ratio payload."
+          }
+        }
+      }
+    },
+    "/reports/salesperson-commission": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Sales Representative Commission & Territory Sales Report",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Salesperson Commission payload."
+          }
+        }
+      }
+    },
+    "/reports/vendor-expenses": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Categorized Vendor Expense Breakdown",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vendor Expenses payload."
+          }
+        }
+      }
+    },
+    "/reports/price-variance": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Vendor Purchase Unit Price Inflation Variance",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Price Variance payload."
+          }
+        }
+      }
+    },
+    "/reports/ppv-audit": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Purchase Price Variance (PPV) Audit Report",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PPV Audit payload."
+          }
+        }
+      }
+    },
+    "/reports/vendor-leadtime-compliance": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Vendor Lead-Time Delivery Compliance Report",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vendor Leadtime Compliance payload."
+          }
+        }
+      }
+    },
+    "/reports/stock-movement": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Inventory Turnover Ratio & Stock Movement Analysis",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock Movement payload."
+          }
+        }
+      }
+    },
+    "/reports/bom-production-costing": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Bill of Materials (BOM) & Production Unit Costing Report",
+        "responses": {
+          "200": {
+            "description": "BOM Production Costing payload."
+          }
+        }
+      }
+    },
+    "/reports/bin-location-stock": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Sub-Godown Bin & Shelf Location Stock Breakdown",
+        "responses": {
+          "200": {
+            "description": "Bin Location Stock payload."
+          }
+        }
+      }
+    },
+    "/reports/dead-stock-analysis": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Dead Stock & Tied-Up Capital Obsolescence Analysis",
+        "parameters": [
+          {
+            "name": "as_of_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dead Stock Analysis payload."
+          }
+        }
+      }
+    },
+    "/reports/collection-efficiency": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Customer Collection Efficiency & DSO Days Report",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection Efficiency payload."
+          }
+        }
+      }
+    },
+    "/reports/statutory-payroll-compliance": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Get Statutory Payroll & Provident Fund Liability Audit",
+        "parameters": [
+          {
+            "name": "start_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Statutory Payroll Compliance payload."
+          }
+        }
+      }
+    },
     "/transactions/contra": {
       "post": {
         "tags": [

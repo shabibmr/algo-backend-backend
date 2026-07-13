@@ -18,6 +18,7 @@ import { reportsRoutes } from './modules/transactions/reports.routes';
 import { dashboardRoutes } from './modules/transactions/dashboard.routes';
 import { inventoryRoutes } from './modules/inventory/inventory.routes';
 import { employeeRoutes } from './modules/employee/employee.routes';
+import { analyticsRoutes } from './modules/reports/analytics.routes';
 import { prisma } from './core/db/prisma';
 import swaggerUi from 'swagger-ui-express';
 import { openApiSpec } from './core/docs/openapi';
@@ -98,6 +99,7 @@ app.use('/transactions', voucherReadRoutes);
 app.use('/transactions', voucherLifecycleRoutes);
 app.use('/transactions/reports', reportsRoutes);
 app.use('/reports', dashboardRoutes);
+app.use('/reports', analyticsRoutes);
 app.use('/inventory', writeLimiter, inventoryRoutes);
 app.use('/employee', writeLimiter, employeeRoutes);
 
