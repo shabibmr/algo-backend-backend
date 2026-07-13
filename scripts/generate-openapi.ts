@@ -265,7 +265,7 @@ const openApiSpec: any = {
           branch_id: { type: 'integer', example: 1 },
           employee_id: { type: 'integer', example: 3 },
         },
-        required: ['contact_id', 'username', 'password', 'role_id'],
+        required: ['username', 'password', 'role_id'],
       },
       UserCredentialsUpdateInput: {
         type: 'object',

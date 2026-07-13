@@ -107,7 +107,7 @@ export const userRoleSchema = z.object({
 
 export const userCredentialsSchema = z.object({
   body: z.object({
-    contact_id: z.number().int(),
+    contact_id: z.number().int().optional().nullable(),
     username: z.string().min(3).max(100),
     password: z.string().min(6),
     role_id: z.number().int(),
@@ -118,6 +118,7 @@ export const userCredentialsSchema = z.object({
 
 export const userUpdateCredentialsSchema = z.object({
   body: z.object({
+    contact_id: z.number().int().optional().nullable(),
     password: z.string().min(6).optional(),
     role_id: z.number().int().optional(),
     branch_id: z.number().int().optional(),

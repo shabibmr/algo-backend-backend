@@ -18,6 +18,7 @@ export interface SalesInvoiceLineInput {
 }
 
 export interface SalesInvoiceInput {
+  status?: string;
   voucher_prefix: string;
   voucher_date: string;
   financial_year: string; // e.g. "2025-26"

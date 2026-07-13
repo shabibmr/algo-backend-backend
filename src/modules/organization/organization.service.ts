@@ -479,15 +479,17 @@ export const OrganizationService = {
     });
     if (existing) throw new ConflictError(`Username ${data.username} already exists`);
 
-    // Ensure contact exists
-    const contact = await addressRepo.findById(data.contact_id);
-    if (!contact) throw new ValidationError('Invalid contact_id: Contact does not exist');
+    // Ensure contact exists if provided
+    if (data.contact_id) {
+      const contact = await addressRepo.findById(data.contact_id);
+      if (!contact) throw new ValidationError('Invalid contact_id: Contact does not exist');
+    }
 
     const hashedPassword = await hashPassword(data.password);
 
     return credsRepo.create(
       {
-        contact_id: data.contact_id,
+        contact_id: data.contact_id || null,
         username: data.username,
         password_hash: hashedPassword,
         role_id: data.role_id,
