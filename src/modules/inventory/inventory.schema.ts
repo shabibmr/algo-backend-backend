@@ -47,7 +47,7 @@ export const taxCategorySchema = z.object({
 export const inventoryGroupSchema = z.object({
   body: z.object({
     group_code: z.string().min(1).max(50).optional().nullable(),
-    Group_ID: z.string().min(1).max(50),
+    Group_ID: z.string().min(1).max(50).optional().nullable(),
     Group_Name: z.string().min(1).max(100),
     parent_group_id: z.number().int().optional().nullable(),
     Parent_ID: z.string().max(50).optional().nullable(),

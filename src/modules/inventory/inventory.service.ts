@@ -236,6 +236,14 @@ export const InventoryGroupService = {
       const parent = await groupRepo.findById(data.parent_group_id);
       if (!parent) throw new ValidationError('Parent group does not exist');
     }
+
+    if (!data.Group_ID || data.Group_ID === '0' || data.Group_ID.trim() === '') {
+      const base = data.group_code
+        ? data.group_code.toUpperCase()
+        : (data.Group_Name || 'GROUP').toUpperCase().replace(/[^A-Z0-9]/g, '_');
+      data.Group_ID = `GRP-${base}-${Date.now()}`.substring(0, 50);
+    }
+
     return groupRepo.create(data, { user });
   },
 
