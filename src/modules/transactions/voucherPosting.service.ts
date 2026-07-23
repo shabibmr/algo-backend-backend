@@ -7,7 +7,8 @@ import { auditService } from '../../core/audit/auditService';
 import { Prisma } from '@prisma/client';
 import { StockLedgerService } from '../inventory/inventory.service';
 
-export interface SalesInvoiceLineInput {
+/** Shared item+qty+price line for SI / PI / credit-debit notes. */
+export interface ItemQtyLineInput {
   item_id: number;
   sku_id?: number | null;
   batch_id?: number | null;
@@ -16,6 +17,9 @@ export interface SalesInvoiceLineInput {
   discount_percent?: number;
   tax_rate?: number;
 }
+
+/** @deprecated Prefer ItemQtyLineInput */
+export type SalesInvoiceLineInput = ItemQtyLineInput;
 
 export interface SalesInvoiceInput {
   status?: string;
@@ -29,7 +33,7 @@ export interface SalesInvoiceInput {
   billing_name?: string | null;
   narration?: string | null;
   credit_days?: number;
-  lines: SalesInvoiceLineInput[];
+  lines: ItemQtyLineInput[];
   source_voucher_id?: number | null;
   source_voucher_type?: string | null;
 }
@@ -45,7 +49,7 @@ export interface PurchaseInvoiceInput {
   billing_name?: string | null;
   narration?: string | null;
   credit_days?: number;
-  lines: SalesInvoiceLineInput[];
+  lines: ItemQtyLineInput[];
 }
 
 export interface CashBankVoucherLineInput {
@@ -101,7 +105,7 @@ export interface NoteVoucherInput {
   godown_id: number;
   billing_name?: string | null;
   narration?: string | null;
-  lines: SalesInvoiceLineInput[];
+  lines: ItemQtyLineInput[];
   return_against_id?: number | null;
 }
 

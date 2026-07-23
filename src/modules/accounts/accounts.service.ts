@@ -367,7 +367,36 @@ export const AccountsService = {
 
   // ── Task 42: Billwise Record list + update ────────────────────
   async createBillwise(data: any, user?: string) {
-    return billwiseRepo.create(data, { user });
+    // Schema validates snake_case; Prisma columns are PascalCase / mixed.
+    const mapped = {
+      voucherPrefix: data.voucher_prefix ?? data.voucherPrefix ?? null,
+      VoucherType: data.voucher_type ?? data.VoucherType ?? null,
+      VoucherNo: data.voucher_no ?? data.VoucherNo ?? null,
+      LedgerID: String(data.ledger_id ?? data.LedgerID ?? ''),
+      RefType: data.ref_type ?? data.RefType ?? null,
+      RefNo: data.ref_no ?? data.RefNo ?? null,
+      RefPrefix: data.ref_prefix ?? data.RefPrefix ?? null,
+      DebitAmount:
+        data.debit_amount !== undefined
+          ? Number(data.debit_amount)
+          : data.DebitAmount !== undefined
+            ? Number(data.DebitAmount)
+            : null,
+      CreditAmount:
+        data.credit_amount !== undefined
+          ? Number(data.credit_amount)
+          : data.CreditAmount !== undefined
+            ? Number(data.CreditAmount)
+            : null,
+      Due_Date: data.due_date
+        ? new Date(data.due_date)
+        : data.Due_Date
+          ? new Date(data.Due_Date)
+          : null,
+      Method_of_adj: data.method_of_adj ?? data.Method_of_adj ?? null,
+      Salesman_ID: data.salesman_id ?? data.Salesman_ID ?? null,
+    };
+    return billwiseRepo.create(mapped, { user });
   },
 
   async getBillwise(id: number) {
