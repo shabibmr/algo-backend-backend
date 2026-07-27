@@ -17,6 +17,7 @@ import {
 } from './employee.repository';
 import { ForbiddenError, NotFoundError, ValidationError } from '../../core/errors/AppError';
 import { toDecimal } from '../../core/utils/decimal';
+import { ListQueryOptions } from '../../core/utils/listQuery';
 import { Prisma } from '@prisma/client';
 
 const departmentRepo = new DepartmentRepository();
@@ -52,8 +53,10 @@ function getDatesInRange(startDate: Date, endDate: Date): Date[] {
 export const DepartmentService = {
   // Returns the full department tree (not a real paginated page — `meta` just reflects
   // the fixed 1000-row cap so callers building a tree view get every node at once).
-  async listDepartments() {
-    const result = await departmentRepo.findMany({ limit: 1000 });
+  async listDepartments(options: Partial<ListQueryOptions> = {}) {
+    // `limit` stays pinned to the tree cap — a caller-supplied page size would
+    // truncate the hierarchy mid-branch. search/sort/filter are honored.
+    const result = await departmentRepo.findMany({ ...options, limit: 1000 });
     const items = [];
 
     for (const dept of result.items) {
@@ -152,8 +155,8 @@ export const DepartmentService = {
 };
 
 export const DesignationService = {
-  async listDesignations() {
-    return designationRepo.findMany({ limit: 1000 });
+  async listDesignations(options: Partial<ListQueryOptions> = {}) {
+    return designationRepo.findMany({ limit: 1000, ...options });
   },
 
   async getDesignation(id: number) {
@@ -224,13 +227,14 @@ export const EmployeeService = {
     };
   },
 
-  async listEmployees() {
+  async listEmployees(options: Partial<ListQueryOptions> = {}) {
     return employeeRepo.findMany({
       include: {
         department_rel: true,
         designation_rel: true,
       },
       limit: 100,
+      ...options,
     });
   },
 
@@ -544,8 +548,8 @@ export const EmployeeDocumentService = {
 
 export const LeaveService = {
   // ── Leave Policy ───────────────────────────────────────────
-  async listPolicies() {
-    return policyRepo.findMany({ limit: 100 });
+  async listPolicies(options: Partial<ListQueryOptions> = {}) {
+    return policyRepo.findMany({ limit: 100, ...options });
   },
 
   async createPolicy(data: any, user?: string) {
@@ -758,7 +762,7 @@ export const LeaveService = {
     });
   },
 
-  async listLeaveRequests(employeeId?: number) {
+  async listLeaveRequests(employeeId?: number, options: Partial<ListQueryOptions> = {}) {
     const where = employeeId ? { employee_id: employeeId } : {};
     return leaveRequestRepo.findMany({
       where,
@@ -768,6 +772,7 @@ export const LeaveService = {
       },
       orderBy: { from_date: 'desc' },
       limit: 100,
+      ...options,
     });
   },
 };
@@ -903,8 +908,8 @@ export const ShiftService = {
     );
   },
 
-  async listShifts() {
-    return shiftRepo.findMany({ limit: 100 });
+  async listShifts(options: Partial<ListQueryOptions> = {}) {
+    return shiftRepo.findMany({ limit: 100, ...options });
   },
 
   // ── Employee Shift Assignment ──────────────────────────────

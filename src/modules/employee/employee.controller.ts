@@ -13,12 +13,13 @@ import {
   OvertimeReportService,
 } from './employee.service';
 import { ApiResponse } from '../../core/types';
+import { getQueryOptions } from '../../core/utils/listQuery';
 
 export const EmployeeController = {
   // ── Department ──────────────────────────────────────────────
   async listDepartments(req: Request, res: Response, next: NextFunction) {
     try {
-      const departments = await DepartmentService.listDepartments();
+      const departments = await DepartmentService.listDepartments(getQueryOptions(req));
       const response: ApiResponse<typeof departments> = {
         success: true,
         data: departments,
@@ -97,7 +98,7 @@ export const EmployeeController = {
   // ── Designation ─────────────────────────────────────────────
   async listDesignations(req: Request, res: Response, next: NextFunction) {
     try {
-      const designations = await DesignationService.listDesignations();
+      const designations = await DesignationService.listDesignations(getQueryOptions(req));
       const response: ApiResponse<typeof designations> = {
         success: true,
         data: designations,
@@ -176,7 +177,7 @@ export const EmployeeController = {
   // ── EmployeeDetails ─────────────────────────────────────────
   async listEmployees(req: Request, res: Response, next: NextFunction) {
     try {
-      const employees = await EmployeeService.listEmployees();
+      const employees = await EmployeeService.listEmployees(getQueryOptions(req));
       const response: ApiResponse<typeof employees> = {
         success: true,
         data: employees,
@@ -335,7 +336,7 @@ export const EmployeeController = {
   // ── Leave Policy & Allocation ──────────────────────────────
   async listPolicies(req: Request, res: Response, next: NextFunction) {
     try {
-      const policies = await LeaveService.listPolicies();
+      const policies = await LeaveService.listPolicies(getQueryOptions(req));
       const response: ApiResponse<typeof policies> = {
         success: true,
         data: policies,
@@ -439,7 +440,7 @@ export const EmployeeController = {
   async listLeaveRequests(req: Request, res: Response, next: NextFunction) {
     try {
       const employeeId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
-      const requests = await LeaveService.listLeaveRequests(employeeId);
+      const requests = await LeaveService.listLeaveRequests(employeeId, getQueryOptions(req));
       const response: ApiResponse<typeof requests> = {
         success: true,
         data: requests,
@@ -506,7 +507,7 @@ export const EmployeeController = {
 
   async listShifts(req: Request, res: Response, next: NextFunction) {
     try {
-      const shifts = await ShiftService.listShifts();
+      const shifts = await ShiftService.listShifts(getQueryOptions(req));
       const response: ApiResponse<typeof shifts> = {
         success: true,
         data: shifts,

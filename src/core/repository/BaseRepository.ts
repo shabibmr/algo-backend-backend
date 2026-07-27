@@ -163,7 +163,10 @@ export class BaseRepository<T> {
           continue;
         }
 
-        if (this.filterFields.length > 0 && !this.filterFields.includes(key)) {
+        // Fail closed: a repository that declares no `filterFields` exposes no
+        // filterable columns. Previously an empty list meant "allow everything",
+        // which let arbitrary query params reach the Prisma `where`.
+        if (!this.filterFields.includes(key)) {
           continue;
         }
 
