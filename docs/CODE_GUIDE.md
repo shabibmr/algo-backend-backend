@@ -56,7 +56,7 @@
 | AuthN | `core/middleware/authenticate.ts` | `router.use(authenticate)` at the top of every module router. |
 | AuthZ (RBAC) | `core/middleware/authorize.ts` | `authorize('ModuleName', 'create'|'read'|'update'|'delete'|'share')` per route. |
 | Tenant context | `core/middleware/tenantContext.ts` | `req.user.companyId` / `branchId`. Scope queries only where the column exists. |
-| Logging | `core/utils/logger.ts` (pino) | `logger.info/warn/error({...})`. Structured objects, not string concatenation. |
+| Logging | `core/utils/logger.ts` (pino) | `logger.info/warn/error({...})` or `req.log`. Structured objects; files under `logs/` when `LOG_TO_FILE=true`. |
 | Audit trail | `core/audit/auditService.ts` | `auditService.log(action, status, data, userId, tx?)` after meaningful mutations. |
 | Response shape | `core/types/index.ts` (`ApiResponse<T>`, `Paginated<T>`) | Wrap every controller response. |
 | Config flags | `core/services/ConfigSettingService.ts` | Read `VAT_RATE`, `FINANCIAL_YEAR`, etc. — never hard-code. |
@@ -400,6 +400,17 @@ constraints, but we throw clean typed errors first):
 - Log state-changing successes at `info`, recoverable/expected failures at `warn`
   (the handler already warns on `AppError`), unexpected failures at `error`.
 - Don't log secrets, passwords, full request bodies with PII, or tokens.
+- Prefer infrastructure hooks (HTTP middleware, Prisma events, `BaseRepository`, `errorHandler`)
+  over sprinkling logs in every controller.
+- On HTTP requests, use `req.log` (child logger with `requestId`) when available.
+- Local files: `backend/logs/app.*.log` (all levels) and `backend/logs/error.*.log` (warn+),
+  daily rotation via `pino-roll`. Console is pretty in development.
+- Env knobs: `LOG_LEVEL`, `LOG_TO_FILE`, `LOG_DIR`, `LOG_REQUEST_BODY`, `LOG_DB_QUERIES`,
+  `LOG_SLOW_QUERY_MS`. Test defaults: silent level, no file writes.
+- Structured `type` taxonomy for filtering:
+  `http` | `http_body` | `db_query` | `db_warn` | `db_error` | `repository` |
+  `exception` | `auth` | `lifecycle` | `unhandledRejection` | `uncaughtException`.
+- Tail on Windows: `Get-Content .\logs\app*.log -Wait -Tail 50`
 
 **Validation**
 - All external input passes a Zod schema via `validate`. Trust nothing from the client.

@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { requestIdMiddleware } from './core/middleware/requestId';
+import { requestLoggerMiddleware } from './core/middleware/requestLogger';
 import { tenantContextMiddleware } from './core/middleware/tenantContext';
 import { idempotency } from './core/middleware/idempotency';
 import { errorHandler } from './core/middleware/errorHandler';
@@ -53,8 +54,9 @@ const writeLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Request tracer and tenant scope injectors
+// Request tracer, HTTP access logs, and tenant scope injectors
 app.use(requestIdMiddleware);
+app.use(requestLoggerMiddleware);
 app.use(tenantContextMiddleware);
 app.use(idempotency);
 

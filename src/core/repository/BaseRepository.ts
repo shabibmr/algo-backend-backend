@@ -1,5 +1,6 @@
 import { prisma } from '../db/prisma';
 import { Paginated } from '../types';
+import { logger } from '../utils/logger';
 
 export interface RepositoryConfig {
   modelName: string; // matches the key in prisma client, e.g. 'ledger_master'
@@ -56,6 +57,39 @@ export class BaseRepository<T> {
   }
 
   /**
+   * Time a repository op and emit structured debug (or error) logs.
+   * Does not log full row payloads.
+   */
+  protected async withRepoLog<R>(
+    op: string,
+    meta: Record<string, unknown>,
+    fn: () => Promise<R>,
+  ): Promise<R> {
+    const start = Date.now();
+    try {
+      const result = await fn();
+      logger.debug({
+        type: 'repository',
+        model: this.modelName,
+        op,
+        durationMs: Date.now() - start,
+        ...meta,
+      });
+      return result;
+    } catch (err: any) {
+      logger.error({
+        type: 'repository',
+        model: this.modelName,
+        op,
+        durationMs: Date.now() - start,
+        error: err?.message,
+        ...meta,
+      });
+      throw err;
+    }
+  }
+
+  /**
    * Inject soft-delete active check into queries if applicable
    */
   protected applySoftDelete(where: any = {}, includeInactive = false): any {
@@ -75,13 +109,15 @@ export class BaseRepository<T> {
     id: any,
     options?: { select?: any; include?: any; includeInactive?: boolean; tx?: any },
   ): Promise<T | null> {
-    const delegate = this.getDelegate(options?.tx);
-    const where = this.applySoftDelete({ [this.pkField]: id }, options?.includeInactive);
+    return this.withRepoLog('findById', { id }, async () => {
+      const delegate = this.getDelegate(options?.tx);
+      const where = this.applySoftDelete({ [this.pkField]: id }, options?.includeInactive);
 
-    return delegate.findFirst({
-      where,
-      select: options?.select,
-      include: options?.include,
+      return delegate.findFirst({
+        where,
+        select: options?.select,
+        include: options?.include,
+      });
     });
   }
 
@@ -96,14 +132,16 @@ export class BaseRepository<T> {
     includeInactive?: boolean;
     tx?: any;
   }): Promise<T | null> {
-    const delegate = this.getDelegate(options.tx);
-    const where = this.applySoftDelete(options.where || {}, options.includeInactive);
+    return this.withRepoLog('findFirst', {}, async () => {
+      const delegate = this.getDelegate(options.tx);
+      const where = this.applySoftDelete(options.where || {}, options.includeInactive);
 
-    return delegate.findFirst({
-      where,
-      select: options.select,
-      include: options.include,
-      orderBy: options.orderBy,
+      return delegate.findFirst({
+        where,
+        select: options.select,
+        include: options.include,
+        orderBy: options.orderBy,
+      });
     });
   }
 
@@ -124,131 +162,150 @@ export class BaseRepository<T> {
     includeInactive?: boolean;
     tx?: any;
   }): Promise<Paginated<T>> {
-    const delegate = this.getDelegate(options.tx);
-    let where = this.applySoftDelete(options.where || {}, options.includeInactive);
-
-    // 1. Full-text search
-    if (options.search && this.searchFields.length > 0) {
-      const searchConditions = this.searchFields.map(field => ({
-        [field]: {
-          contains: options.search,
-        }
-      }));
-      where = {
-        ...where,
-        OR: searchConditions,
-      };
-    }
-
-    // 2. Field Filters
-    if (options.filters) {
-      const filterConditions: any = {};
-      for (const [key, val] of Object.entries(options.filters)) {
-        if (val === undefined || val === '') continue;
-
-        if (key === 'from_date') {
-          const dateField = this.modelName.includes('voucher') || this.modelName.includes('invoice') || this.modelName.includes('note') ? 'voucher_date' : 'created_at';
-          filterConditions[dateField] = {
-            ...(filterConditions[dateField] || {}),
-            gte: new Date(String(val)),
-          };
-          continue;
-        }
-        if (key === 'to_date') {
-          const dateField = this.modelName.includes('voucher') || this.modelName.includes('invoice') || this.modelName.includes('note') ? 'voucher_date' : 'created_at';
-          filterConditions[dateField] = {
-            ...(filterConditions[dateField] || {}),
-            lte: new Date(String(val)),
-          };
-          continue;
-        }
-
-        // Fail closed: a repository that declares no `filterFields` exposes no
-        // filterable columns. Previously an empty list meant "allow everything",
-        // which let arbitrary query params reach the Prisma `where`.
-        if (!this.filterFields.includes(key)) {
-          continue;
-        }
-
-        if (val === 'true') {
-          filterConditions[key] = true;
-        } else if (val === 'false') {
-          filterConditions[key] = false;
-        } else if (val === 'null') {
-          filterConditions[key] = null;
-        } else if (!isNaN(Number(val)) && val !== '' && typeof val === 'string') {
-          filterConditions[key] = Number(val);
-        } else {
-          filterConditions[key] = val;
-        }
-      }
-      where = {
-        ...where,
-        ...filterConditions,
-      };
-    }
-
     const page = options.page || 1;
     const limit = options.limit || 20;
-    const skip = (page - 1) * limit;
 
-    // 3. Sorting
-    let orderBy = options.orderBy;
-    if (options.sortBy) {
-      orderBy = {
-        [options.sortBy]: options.sortOrder === 'asc' ? 'asc' : 'desc',
-      };
-    } else if (!orderBy) {
-      orderBy = {
-        [this.pkField]: 'desc',
-      };
-    }
+    return this.withRepoLog(
+      'findMany',
+      { page, limit, search: options.search || undefined },
+      async () => {
+        const delegate = this.getDelegate(options.tx);
+        let where = this.applySoftDelete(options.where || {}, options.includeInactive);
 
-    const [items, total] = await Promise.all([
-      delegate.findMany({
-        where,
-        select: options.select,
-        include: options.include,
-        orderBy,
-        skip,
-        take: limit,
-      }),
-      delegate.count({ where }),
-    ]);
+        // 1. Full-text search
+        if (options.search && this.searchFields.length > 0) {
+          const searchConditions = this.searchFields.map(field => ({
+            [field]: {
+              contains: options.search,
+            },
+          }));
+          where = {
+            ...where,
+            OR: searchConditions,
+          };
+        }
 
-    const totalPages = Math.ceil(total / limit);
+        // 2. Field Filters
+        if (options.filters) {
+          const filterConditions: any = {};
+          for (const [key, val] of Object.entries(options.filters)) {
+            if (val === undefined || val === '') continue;
 
-    return {
-      items,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages,
+            if (key === 'from_date') {
+              const dateField =
+                this.modelName.includes('voucher') ||
+                this.modelName.includes('invoice') ||
+                this.modelName.includes('note')
+                  ? 'voucher_date'
+                  : 'created_at';
+              filterConditions[dateField] = {
+                ...(filterConditions[dateField] || {}),
+                gte: new Date(String(val)),
+              };
+              continue;
+            }
+            if (key === 'to_date') {
+              const dateField =
+                this.modelName.includes('voucher') ||
+                this.modelName.includes('invoice') ||
+                this.modelName.includes('note')
+                  ? 'voucher_date'
+                  : 'created_at';
+              filterConditions[dateField] = {
+                ...(filterConditions[dateField] || {}),
+                lte: new Date(String(val)),
+              };
+              continue;
+            }
+
+            // Fail closed: a repository that declares no `filterFields` exposes no
+            // filterable columns. Previously an empty list meant "allow everything",
+            // which let arbitrary query params reach the Prisma `where`.
+            if (!this.filterFields.includes(key)) {
+              continue;
+            }
+
+            if (val === 'true') {
+              filterConditions[key] = true;
+            } else if (val === 'false') {
+              filterConditions[key] = false;
+            } else if (val === 'null') {
+              filterConditions[key] = null;
+            } else if (!isNaN(Number(val)) && val !== '' && typeof val === 'string') {
+              filterConditions[key] = Number(val);
+            } else {
+              filterConditions[key] = val;
+            }
+          }
+          where = {
+            ...where,
+            ...filterConditions,
+          };
+        }
+
+        const skip = (page - 1) * limit;
+
+        // 3. Sorting
+        let orderBy = options.orderBy;
+        if (options.sortBy) {
+          orderBy = {
+            [options.sortBy]: options.sortOrder === 'asc' ? 'asc' : 'desc',
+          };
+        } else if (!orderBy) {
+          orderBy = {
+            [this.pkField]: 'desc',
+          };
+        }
+
+        const [items, total] = await Promise.all([
+          delegate.findMany({
+            where,
+            select: options.select,
+            include: options.include,
+            orderBy,
+            skip,
+            take: limit,
+          }),
+          delegate.count({ where }),
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
+
+        return {
+          items,
+          meta: {
+            total,
+            page,
+            limit,
+            totalPages,
+          },
+        };
       },
-    };
+    );
   }
 
   /**
    * Create a new record, injecting audit fields
    */
   async create(data: any, options?: { user?: string; tx?: any }): Promise<T> {
-    const delegate = this.getDelegate(options?.tx);
-    const decoratedData = { ...data };
+    return this.withRepoLog('create', {}, async () => {
+      const delegate = this.getDelegate(options?.tx);
+      const decoratedData = { ...data };
 
-    if (options?.user) {
-      if (this.auditMap.addedBy) {
-        decoratedData[this.auditMap.addedBy] = options.user;
+      if (options?.user) {
+        if (this.auditMap.addedBy) {
+          decoratedData[this.auditMap.addedBy] = options.user;
+        }
+        if (this.auditMap.lastModifiedBy) {
+          decoratedData[this.auditMap.lastModifiedBy] = options.user;
+        }
       }
-      if (this.auditMap.lastModifiedBy) {
-        decoratedData[this.auditMap.lastModifiedBy] = options.user;
-      }
-    }
 
-    // Default dates are handled by DB schema defaults, but can set here if needed
+      // Default dates are handled by DB schema defaults, but can set here if needed
 
-    return delegate.create({
-      data: decoratedData,
+      return delegate.create({
+        data: decoratedData,
+      });
     });
   }
 
@@ -256,23 +313,25 @@ export class BaseRepository<T> {
    * Update an existing record by id, injecting audit fields
    */
   async update(id: any, data: any, options?: { user?: string; tx?: any }): Promise<T> {
-    const delegate = this.getDelegate(options?.tx);
-    const decoratedData = { ...data };
+    return this.withRepoLog('update', { id }, async () => {
+      const delegate = this.getDelegate(options?.tx);
+      const decoratedData = { ...data };
 
-    if (options?.user) {
-      if (this.auditMap.lastModifiedBy) {
-        decoratedData[this.auditMap.lastModifiedBy] = options.user;
+      if (options?.user) {
+        if (this.auditMap.lastModifiedBy) {
+          decoratedData[this.auditMap.lastModifiedBy] = options.user;
+        }
       }
-    }
 
-    // Explicitly update last modified date if not handled by db trigger
-    if (this.auditMap.lastModified) {
-      decoratedData[this.auditMap.lastModified] = new Date();
-    }
+      // Explicitly update last modified date if not handled by db trigger
+      if (this.auditMap.lastModified) {
+        decoratedData[this.auditMap.lastModified] = new Date();
+      }
 
-    return delegate.update({
-      where: { [this.pkField]: id },
-      data: decoratedData,
+      return delegate.update({
+        where: { [this.pkField]: id },
+        data: decoratedData,
+      });
     });
   }
 
@@ -280,38 +339,46 @@ export class BaseRepository<T> {
    * Delete a record by primary key (performs soft delete by default)
    */
   async delete(id: any, options?: { user?: string; hardDelete?: boolean; tx?: any }): Promise<T> {
-    const delegate = this.getDelegate(options?.tx);
+    return this.withRepoLog(
+      'delete',
+      { id, hardDelete: !!options?.hardDelete },
+      async () => {
+        const delegate = this.getDelegate(options?.tx);
 
-    if (this.softDeleteField && !options?.hardDelete) {
-      const updateData: any = {
-        [this.softDeleteField]: false,
-      };
+        if (this.softDeleteField && !options?.hardDelete) {
+          const updateData: any = {
+            [this.softDeleteField]: false,
+          };
 
-      if (options?.user && this.auditMap.lastModifiedBy) {
-        updateData[this.auditMap.lastModifiedBy] = options.user;
-      }
+          if (options?.user && this.auditMap.lastModifiedBy) {
+            updateData[this.auditMap.lastModifiedBy] = options.user;
+          }
 
-      if (this.auditMap.lastModified) {
-        updateData[this.auditMap.lastModified] = new Date();
-      }
+          if (this.auditMap.lastModified) {
+            updateData[this.auditMap.lastModified] = new Date();
+          }
 
-      return delegate.update({
-        where: { [this.pkField]: id },
-        data: updateData,
-      });
-    }
+          return delegate.update({
+            where: { [this.pkField]: id },
+            data: updateData,
+          });
+        }
 
-    return delegate.delete({
-      where: { [this.pkField]: id },
-    });
+        return delegate.delete({
+          where: { [this.pkField]: id },
+        });
+      },
+    );
   }
 
   /**
    * Count matching records
    */
   async count(options?: { where?: any; includeInactive?: boolean; tx?: any }): Promise<number> {
-    const delegate = this.getDelegate(options?.tx);
-    const where = this.applySoftDelete(options?.where || {}, options?.includeInactive);
-    return delegate.count({ where });
+    return this.withRepoLog('count', {}, async () => {
+      const delegate = this.getDelegate(options?.tx);
+      const where = this.applySoftDelete(options?.where || {}, options?.includeInactive);
+      return delegate.count({ where });
+    });
   }
 }

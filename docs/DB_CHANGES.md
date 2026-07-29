@@ -42,6 +42,103 @@ There is no migration framework. Per `backend/prisma/README.md`, **never** run `
 
 ---
 
+## Applied — gm_db_new catch-up
+
+> Note: `backend/.env` currently points at **`gm_db_new`**, which is closer to the older
+> dump and was missing org tables that exist on `gm_shi_fixed` / in Prisma.
+
+### ORG-FY-001 — Create missing `financialyear` table on `gm_db_new`
+
+**Status:** Applied (2026-07-29)
+
+**Finding:** Prisma model `financialyear` and `GET /auth/me` call
+`prisma.financialyear.findFirst()`. On `gm_db_new` the table did not exist → Prisma
+`db_error`: *The table `financialyear` does not exist in the current database.*
+Code already soft-failed (`activeFY = null` in try/catch), but logs still recorded
+level-50 errors and `/auth/me` never returned an active FY.
+
+**DDL applied** (matches `backend/docs/db/live_schema.sql` / Prisma):
+
+```sql
+CREATE TABLE IF NOT EXISTS `financialyear` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `fy_code` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `display_name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `status` enum('Open','Closed','Locked') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Open',
+  `is_default` tinyint(1) NOT NULL DEFAULT 0,
+  `company_id` int(11) NOT NULL,
+  `added_by` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_fy` (`fy_code`,`company_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+```
+
+**Seed:** default open FY for `company_id = 1` (SHI BY ZAINS):
+
+| id | fy_code | display_name | start_date | end_date   | status | is_default |
+|----|---------|--------------|------------|------------|--------|------------|
+| 1  | 2026-27 | FY 2026-27   | 2026-04-01 | 2027-03-31 | Open   | 1          |
+
+**Prisma:** no schema change — model already matched this table shape.
+
+---
+
+### ORG-ALIGN-001 — Catch-up remaining Prisma tables on `gm_db_new`
+
+**Status:** Applied (2026-07-29)
+
+**Finding:** `gm_db_new` had 142 tables vs 153 Prisma models (`gm_shi_fixed`).
+After ORG-FY-001, **22 tables** and **2 employee columns** were still missing.
+
+**Script:** `backend/docs/db/gm_db_new_prisma_catchup.sql`  
+(DDL sourced from `backend/docs/db/live_schema.sql`; no FK constraints.)
+
+**Tables created (22):**
+
+| Group | Tables |
+|-------|--------|
+| Org | `branch`, `currencymaster`, `currencyrates`, `voucherseries` |
+| Numbering | `transactionhelper` *(not* the legacy `transaction_helper`*)* |
+| Employee | `department`, `designation`, `employeebankdetails`, `employeedocuments`, `employeeshiftassignment`, `leaveallocation`, `leavepolicy`, `leaverequest`, `salaryrevisionhistory`, `shiftmaster` |
+| Inventory / TX | `financial_journal_entries`, `inventory_movements`, `inventory_movement_lines`, `inventory_valuations`, `itemphysicalspecs`, `shipments`, `voucherlinkage` |
+
+**Column alter:**
+
+```sql
+ALTER TABLE employee_details
+  ADD COLUMN department_id INT NULL,
+  ADD COLUMN designation_id INT NULL;
+```
+
+**Seeds applied:**
+
+| Object | Result |
+|--------|--------|
+| `branch` | id=1, BR001, Main Branch, company_id=1 |
+| `user_credentials.branch_id` | set to 1 where null/0 |
+| `transactionhelper` | 17 voucher type/prefix rows for FY 2026-27 |
+| `voucherseries` | 9 default series for company 1 |
+| `currencymaster` | AED base currency |
+
+**Verify (post-apply):**
+
+| | Count |
+|---|---|
+| Prisma models | 153 |
+| `gm_db_new` tables | 164 |
+| Missing vs Prisma | **0** |
+| Extra legacy-only tables | 11 (`transaction_helper`, `old_kot_*`, `test*`, …) |
+
+**Prisma:** no schema change — models already matched `gm_shi_fixed`.
+
+**Not done (optional later):** drop dead legacy tables/columns; INV-* cleanup on items/groups.
+
+---
+
 ## 0. Cross-cutting
 
 ### GEN-001 — The database has no foreign keys at all

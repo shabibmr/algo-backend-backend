@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 *.log
+/logs/
 .claude/scratch/
 src/scratch_*.ts
 scripts/scratch_*.ts

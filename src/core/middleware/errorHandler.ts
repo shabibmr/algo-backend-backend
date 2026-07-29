@@ -13,6 +13,8 @@ export async function errorHandler(
   next: NextFunction,
 ) {
   const requestId = req.requestId || 'unknown';
+  const durationMs = req._startTime != null ? Date.now() - req._startTime : undefined;
+  const log = req.log || logger;
 
   // Map Zod validation errors to ValidationError
   if (err instanceof ZodError) {
@@ -21,13 +23,17 @@ export async function errorHandler(
 
   // Handle operational AppErrors
   if (err instanceof AppError) {
-    logger.warn({
+    log.warn({
+      type: 'exception',
       message: err.message,
+      errorName: err.name,
       statusCode: err.statusCode,
       requestId,
+      userId: req.user?.userId,
       details: err instanceof ValidationError ? err.details : undefined,
-      path: req.path,
+      path: req.originalUrl || req.path,
       method: req.method,
+      durationMs,
     });
 
     const response: ApiResponse<null> = {
@@ -43,12 +49,17 @@ export async function errorHandler(
   }
 
   // Handle unexpected/system errors (500)
-  logger.error({
+  log.error({
+    type: 'exception',
     message: err.message || 'Internal Server Error',
+    errorName: err.name || 'Error',
     stack: err.stack,
     requestId,
-    path: req.path,
+    userId: req.user?.userId,
+    path: req.originalUrl || req.path,
     method: req.method,
+    statusCode: 500,
+    durationMs,
   });
 
   // Write log to error_reporting database table
@@ -62,7 +73,8 @@ export async function errorHandler(
       },
     });
   } catch (dbErr: any) {
-    logger.error({
+    log.error({
+      type: 'exception',
       message: 'Failed to write to error_reporting table',
       error: dbErr.message,
       requestId,

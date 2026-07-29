@@ -6,6 +6,7 @@ import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '.
 import { UnauthorizedError, ValidationError } from '../errors/AppError';
 import { ApiResponse } from '../types';
 import auditService from '../audit/auditService';
+import { logger } from '../utils/logger';
 
 export const loginSchema = z.object({
   body: z.object({
@@ -34,6 +35,14 @@ export const authController = {
   async login(req: Request, res: Response, next: NextFunction) {
     try {
       const { username, password } = req.body;
+      const log = req.log || logger;
+
+      log.info({
+        type: 'auth',
+        event: 'login_attempt',
+        username,
+        requestId: req.requestId,
+      });
 
       // Find user
       const user = await prisma.user_credentials.findUnique({
@@ -44,6 +53,13 @@ export const authController = {
       });
 
       if (!user || !user.is_active) {
+        log.warn({
+          type: 'auth',
+          event: 'login_failure',
+          username,
+          reason: 'invalid_credentials',
+          requestId: req.requestId,
+        });
         throw new UnauthorizedError('Invalid username or password');
       }
 
@@ -51,6 +67,14 @@ export const authController = {
       const isPasswordValid = await verifyPassword(password, user.password_hash);
       if (!isPasswordValid) {
         // Log failed attempt
+        log.warn({
+          type: 'auth',
+          event: 'login_failure',
+          username,
+          userId: user.id,
+          reason: 'invalid_credentials',
+          requestId: req.requestId,
+        });
         await auditService.log('LOGIN', 'FAILURE', { username }, user.id);
         throw new UnauthorizedError('Invalid username or password');
       }
@@ -94,6 +118,14 @@ export const authController = {
       // Audit successful login
       await auditService.log('LOGIN', 'SUCCESS', { username }, user.id);
 
+      log.info({
+        type: 'auth',
+        event: 'login_success',
+        username,
+        userId: user.id,
+        requestId: req.requestId,
+      });
+
       const response: ApiResponse<any> = {
         success: true,
         message: 'Login successful',
@@ -124,11 +156,18 @@ export const authController = {
   async refresh(req: Request, res: Response, next: NextFunction) {
     try {
       const { refreshToken } = req.body;
+      const log = req.log || logger;
 
       let decoded;
       try {
         decoded = verifyRefreshToken(refreshToken);
       } catch (err) {
+        log.warn({
+          type: 'auth',
+          event: 'refresh_failure',
+          reason: 'invalid_token',
+          requestId: req.requestId,
+        });
         throw new UnauthorizedError('Invalid or expired refresh token');
       }
 
@@ -138,6 +177,13 @@ export const authController = {
       });
 
       if (!user || !user.is_active) {
+        log.warn({
+          type: 'auth',
+          event: 'refresh_failure',
+          userId: decoded.userId,
+          reason: 'user_inactive',
+          requestId: req.requestId,
+        });
         throw new UnauthorizedError('User is no longer active');
       }
 
@@ -151,6 +197,13 @@ export const authController = {
 
       const accessToken = generateAccessToken(payload);
       const newRefreshToken = generateRefreshToken(payload);
+
+      log.info({
+        type: 'auth',
+        event: 'refresh_success',
+        userId: user.id,
+        requestId: req.requestId,
+      });
 
       const response: ApiResponse<any> = {
         success: true,
@@ -197,16 +250,35 @@ export const authController = {
         }
       }
 
-      const activeFY = companyId ? (await prisma.financialyear.findFirst({
-        where: { company_id: companyId, is_default: true },
-      }) || await prisma.financialyear.findFirst({
-        where: { company_id: companyId },
-        orderBy: { start_date: 'desc' },
-      })) : null;
+      // financialyear may be missing on older DBs (schema drift) — never fail /auth/me for that
+      let activeFY: {
+        id: number;
+        fy_code: string;
+        display_name: string;
+        start_date: Date;
+        end_date: Date;
+        status: string;
+      } | null = null;
+      if (companyId) {
+        try {
+          activeFY =
+            (await prisma.financialyear.findFirst({
+              where: { company_id: companyId, is_default: true },
+            })) ||
+            (await prisma.financialyear.findFirst({
+              where: { company_id: companyId },
+              orderBy: { start_date: 'desc' },
+            }));
+        } catch {
+          activeFY = null;
+        }
+      }
 
-      const permissions = await prisma.user_access_permissions.findMany({
-        where: { role_id: user.role_id },
-      });
+      const permissions = user.role_id
+        ? await prisma.user_access_permissions.findMany({
+            where: { role_id: user.role_id },
+          })
+        : [];
 
       const response: ApiResponse<any> = {
         success: true,
@@ -214,19 +286,21 @@ export const authController = {
           id: user.id,
           username: user.username,
           roleId: user.role_id,
-          roleName: user.user_roles.role_name,
+          roleName: user.user_roles?.role_name ?? null,
           branchId: user.branch_id,
           companyId,
           lastLoginAt: user.last_login_at,
-          activeFinancialYear: activeFY ? {
-            id: activeFY.id,
-            fyCode: activeFY.fy_code,
-            displayName: activeFY.display_name,
-            startDate: activeFY.start_date,
-            endDate: activeFY.end_date,
-            status: activeFY.status,
-          } : null,
-          permissions: permissions.map(p => ({
+          activeFinancialYear: activeFY
+            ? {
+                id: activeFY.id,
+                fyCode: activeFY.fy_code,
+                displayName: activeFY.display_name,
+                startDate: activeFY.start_date,
+                endDate: activeFY.end_date,
+                status: activeFY.status,
+              }
+            : null,
+          permissions: permissions.map((p) => ({
             module_name: p.module_name || '',
             Allow_Create: !!p.Allow_Create,
             Allow_Read: !!p.Allow_Read,
@@ -279,13 +353,23 @@ export const authController = {
       const userId = req.user?.userId;
       if (!userId) throw new UnauthorizedError('Not authenticated');
 
+      const log = req.log || logger;
       const { currentPassword, newPassword } = req.body;
 
       const user = await prisma.user_credentials.findUnique({ where: { id: userId } });
       if (!user) throw new UnauthorizedError('User not found');
 
       const valid = await verifyPassword(currentPassword, user.password_hash);
-      if (!valid) throw new ValidationError('Current password is incorrect');
+      if (!valid) {
+        log.warn({
+          type: 'auth',
+          event: 'change_password_failure',
+          userId,
+          reason: 'current_password_incorrect',
+          requestId: req.requestId,
+        });
+        throw new ValidationError('Current password is incorrect');
+      }
 
       const newHash = await hashPassword(newPassword);
       await prisma.user_credentials.update({
@@ -294,6 +378,13 @@ export const authController = {
       });
 
       await auditService.log('CHANGE_PASSWORD', 'SUCCESS', { userId }, userId);
+
+      log.info({
+        type: 'auth',
+        event: 'change_password_success',
+        userId,
+        requestId: req.requestId,
+      });
 
       return res
         .status(200)
@@ -311,8 +402,15 @@ export const authController = {
   async logout(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = req.user?.userId;
+      const log = req.log || logger;
       if (userId) {
         await auditService.log('LOGOUT', 'SUCCESS', {}, userId);
+        log.info({
+          type: 'auth',
+          event: 'logout',
+          userId,
+          requestId: req.requestId,
+        });
       }
       return res
         .status(200)

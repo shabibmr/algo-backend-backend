@@ -41,6 +41,10 @@ declare global {
       user?: AuthUser;
       tenant?: TenantContext;
       requestId?: string;
+      /** Child pino logger bound to this request (set by requestLoggerMiddleware). */
+      log?: import('pino').Logger;
+      /** Request start timestamp (ms) for duration logging. */
+      _startTime?: number;
     }
   }
 }
