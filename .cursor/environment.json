@@ -1,0 +1,22 @@
+{
+  "name": "algoERP Backend",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "user": "ubuntu",
+  "install": "chmod +x scripts/cloud-agent-install.sh scripts/cloud-agent-start.sh && ./scripts/cloud-agent-install.sh",
+  "start": "./scripts/cloud-agent-start.sh",
+  "terminals": [
+    {
+      "name": "api",
+      "command": "npm run dev"
+    }
+  ],
+  "ports": [
+    {
+      "name": "api",
+      "port": 5000
+    }
+  ]
+}
