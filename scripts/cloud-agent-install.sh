@@ -43,18 +43,20 @@ run_sql() {
 }
 
 ensure_db_user() {
+  local db_password
+
   if [[ -f "$DB_ENV_FILE" ]]; then
     # shellcheck disable=SC1090
     source "$DB_ENV_FILE"
-    return 0
+    db_password="$DB_PASSWORD"
+  else
+    db_password="$(openssl rand -hex 16)"
   fi
-
-  local db_password
-  db_password="$(openssl rand -hex 16)"
 
   run_sql <<SQL
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${db_password}';
+ALTER USER '${DB_USER}'@'localhost' IDENTIFIED BY '${db_password}';
 GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
 FLUSH PRIVILEGES;
 SQL
@@ -66,6 +68,11 @@ DB_PASSWORD=${db_password}
 DATABASE_URL=mysql://${DB_USER}:${db_password}@localhost:3306/${DB_NAME}
 ENV
   chmod 600 "$DB_ENV_FILE"
+
+  if ! mariadb -u "$DB_USER" -p"$db_password" "$DB_NAME" -e "SELECT 1" >/dev/null 2>&1; then
+    echo "MariaDB credentials verification failed for user ${DB_USER}." >&2
+    exit 1
+  fi
 }
 
 import_schema_if_needed() {
