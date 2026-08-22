@@ -2,8 +2,10 @@ node_modules/
 dist/
 .env
 .env.*
+!.env.example
 *.log
 /logs/
+.cursor/runtime/
 .claude/scratch/
 src/scratch_*.ts
 scripts/scratch_*.ts
