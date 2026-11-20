@@ -7,6 +7,8 @@ import { generateAccessToken } from '../src/core/auth/jwt';
 describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
   let adminToken: string;
   let testItemId: number;
+  const itemCode = `OXFORD-${Date.now()}`;
+  const createdAttrIds: number[] = [];
 
   beforeAll(async () => {
     // Generate valid admin token for Inventory module
@@ -17,11 +19,11 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
       branchId: 1,
     });
 
-    // Create a test item master if not already present
-    const testItem = await (prisma as any).sales_inventory_items.create({
+    // Unique code per run so a rerun does not collide with uk_item_code
+    const testItem = await prisma.sales_inventory_items.create({
       data: {
         Item_Name: 'Oxford Cotton Shirt',
-        Item_Code: 'OXFORD01',
+        Item_Code: itemCode,
         Group_Id: 'GRP1',
         Price: 45.0,
         is_active: true,
@@ -31,13 +33,22 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
   });
 
   afterAll(async () => {
-    // Cleanup created test records
-    await (prisma as any).sku_attribute_values.deleteMany({});
-    await (prisma as any).sku_master.deleteMany({ where: { inventory_item_id: testItemId } });
-    await (prisma as any).item_attribute_assignments.deleteMany({ where: { item_id: testItemId } });
-    await (prisma as any).product_attribute_values.deleteMany({});
-    await (prisma as any).product_attributes.deleteMany({});
-    await (prisma as any).sales_inventory_items.deleteMany({ where: { id: testItemId } });
+    // Delete only rows this file created. Children before parents (fk_attr_parent is Restrict).
+    const attrIds = createdAttrIds.filter((id) => id !== undefined);
+    const skus = await prisma.sku_master.findMany({
+      where: { inventory_item_id: testItemId },
+      select: { id: true },
+    });
+    const skuIds = skus.map((s) => s.id);
+    await prisma.sku_attribute_values.deleteMany({ where: { sku_id: { in: skuIds } } });
+    await prisma.sku_master.deleteMany({ where: { inventory_item_id: testItemId } });
+    await prisma.item_attribute_assignments.deleteMany({ where: { item_id: testItemId } });
+    await prisma.product_attribute_values.deleteMany({ where: { attribute_id: { in: attrIds } } });
+    await prisma.product_attributes.deleteMany({
+      where: { id: { in: attrIds }, parent_id: { not: null } },
+    });
+    await prisma.product_attributes.deleteMany({ where: { id: { in: attrIds } } });
+    await prisma.sales_inventory_items.deleteMany({ where: { id: testItemId } });
   });
 
   let sizeAttrId: number;
@@ -63,6 +74,7 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.id).toBeDefined();
     sizeAttrId = res.body.data.id;
+    createdAttrIds.push(sizeAttrId);
 
     // Add option M
     const optM = await request(app)
@@ -109,6 +121,7 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
 
     expect(res.status).toBe(201);
     colorAttrId = res.body.data.id;
+    createdAttrIds.push(colorAttrId);
 
     // Attempting to add options to an EDITABLE attribute should fail validation
     const failOpt = await request(app)
@@ -130,6 +143,7 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
 
     expect(groupRes.status).toBe(201);
     groupAttrId = groupRes.body.data.id;
+    createdAttrIds.push(groupAttrId);
 
     // Add sub-attribute Neck
     const neckRes = await request(app)
@@ -144,6 +158,7 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
       });
     expect(neckRes.status).toBe(201);
     neckAttrId = neckRes.body.data.id;
+    createdAttrIds.push(neckAttrId);
 
     // Add sub-attribute Chest
     const chestRes = await request(app)
@@ -158,6 +173,7 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
       });
     expect(chestRes.status).toBe(201);
     chestAttrId = chestRes.body.data.id;
+    createdAttrIds.push(chestAttrId);
 
     // Verify 2-level hierarchy invariant: nested group must be rejected
     const nestedGroupFail = await request(app)
@@ -221,8 +237,8 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
     expect(res.body.data.sku.id).toBeDefined();
     resolvedSkuId = res.body.data.sku.id;
 
-    // Verify semantic code generation (Option A: OXFORD01-L-NAVYBLUE-165)
-    expect(res.body.data.sku.sku_code).toContain('OXFORD01');
+    // Verify semantic code generation (Option A: <itemCode>-L-NAVYBLUE-165)
+    expect(res.body.data.sku.sku_code).toContain(itemCode);
     expect(res.body.data.sku.sku_code).toContain('L');
     expect(res.body.data.sku.sku_code).toContain('NAVYBLUE');
     expect(res.body.data.sku.attribute_summary).toContain('Size: L');
