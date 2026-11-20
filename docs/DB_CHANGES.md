@@ -383,3 +383,21 @@ Two clusters remain on `sales_inventory_items` after INV-001…004:
 **Why rejected:** `NULL` is the correct SQL representation of "no parent". A `0` default means a sentinel `id = 0` "Root" row must be created and maintained forever — which additionally needs `NO_AUTO_VALUE_ON_ZERO` in `sql_mode` to insert at all — and every `IS NULL` root check in the codebase would have to change. The backend's hierarchy cycle-guard in `inventory.service.ts` already treats `NULL` as the root terminator, correctly.
 
 The original doc's stated blocker (that the self-FK `fk_inv_group_parent` would reject `0`) turns out to be **factually wrong** — that FK does not exist in the live DB; see **GEN-001**. The proposal is rejected on design grounds regardless. Kept here so the idea is not re-proposed.
+
+---
+
+### INV-ATTR-001 — Product Attributes, Values, Item Assignments, and Variant SKU Resolution
+
+**Status:** Approved (2026-11-20)
+
+**Scope:**
+1. Adds `product_attributes` table for managing reusable product attributes:
+   - Supports types: `PREDETERMINED` (options pre-configured), `EDITABLE` (free-text / transaction input), `GROUP` (composite group).
+   - Strict 2-level self-referencing hierarchy (`parent_id`) for grouping sub-attributes (e.g. "Shirt Measurements" -> Neck, Chest, Shoulder, Sleeve).
+2. Adds `product_attribute_values` table for pre-determined option choices (e.g. Size -> S, M, L, XL).
+3. Adds `item_attribute_assignments` table linking configured attributes to `sales_inventory_items`.
+4. Adds `sku_attribute_values` table storing the exact attribute-value pairs for each SKU variant.
+5. Extends `sku_master` with `attribute_hash` (deterministic canonical hash) and `attribute_summary` with unique index `uk_item_attr_hash (inventory_item_id, attribute_hash)` to guarantee deterministic variant-to-SKU resolution.
+
+**DDL script:** `docs/db/INV-ATTR-001_product_attributes.sql`
+

@@ -147,6 +147,35 @@ async function genericList(voucherType: string, relationKey: string, filters: Li
 
 // ─── 1. SalesInvoice ───────────────────────────────────────────────────────────
 
+interface SkuLabel {
+  id: number;
+  sku_code: string | null;
+  attribute_summary: string | null;
+}
+
+/** Pure merge: copies sku_code and attribute_summary onto lines that have a voucher_sku_id. */
+export function mergeSkuLabels<T extends { voucher_sku_id?: number | null }>(
+  details: T[],
+  skus: SkuLabel[],
+): Array<T & { sku_code?: string | null; attribute_summary?: string | null }> {
+  const byId = new Map(skus.map((s) => [s.id, s]));
+  return details.map((d) => {
+    const sku = d.voucher_sku_id ? byId.get(d.voucher_sku_id) : undefined;
+    return sku ? { ...d, sku_code: sku.sku_code, attribute_summary: sku.attribute_summary } : d;
+  });
+}
+
+/** Loads all referenced SKUs in one query and labels the detail lines. */
+export async function attachSkuLabels<T extends { voucher_sku_id?: number | null }>(details: T[]) {
+  const ids = [...new Set(details.map((d) => d.voucher_sku_id).filter((id): id is number => !!id))];
+  if (ids.length === 0) return details;
+  const skus = await prisma.sku_master.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, sku_code: true, attribute_summary: true },
+  });
+  return mergeSkuLabels(details, skus);
+}
+
 export const SalesInvoiceReadService = {
   async list(filters: ListFilters) {
     return genericList('SalesInvoice', 'sales_invoice_main', filters);
@@ -158,7 +187,9 @@ export const SalesInvoiceReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`SalesInvoice #${id} not found`);
-    const details = await prisma.sales_invoice_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.sales_invoice_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -176,7 +207,9 @@ export const PurchaseInvoiceReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`PurchaseInvoice #${id} not found`);
-    const details = await prisma.purchase_invoice_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.purchase_invoice_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -266,7 +299,9 @@ export const CreditNoteReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`CreditNote #${id} not found`);
-    const details = await prisma.credit_note_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.credit_note_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -284,7 +319,9 @@ export const DebitNoteReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`DebitNote #${id} not found`);
-    const details = await prisma.debit_note_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.debit_note_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -302,7 +339,9 @@ export const QuotationReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`Quotation #${id} not found`);
-    const details = await prisma.quotation_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.quotation_details.findMany({ where: { voucher_id: id } }),
+    );
     const linkages = await prisma.voucherlinkage.findMany({
       where: { OR: [{ source_voucher_id: id }, { target_voucher_id: id }] },
     });
@@ -323,7 +362,9 @@ export const SalesOrderReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`SalesOrder #${id} not found`);
-    const details = await prisma.sales_order_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.sales_order_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -341,7 +382,9 @@ export const PurchaseOrderReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`PurchaseOrder #${id} not found`);
-    const details = await prisma.purchase_order_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.purchase_order_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -359,7 +402,9 @@ export const DeliveryNoteReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`DeliveryNote #${id} not found`);
-    const details = await prisma.delivery_note_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.delivery_note_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -377,7 +422,9 @@ export const ReceiptNoteReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`ReceiptNote #${id} not found`);
-    const details = await prisma.receipt_note_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.receipt_note_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -395,7 +442,9 @@ export const GodownTransferReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`GodownTransfer #${id} not found`);
-    const details = await prisma.godown_transfer_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.godown_transfer_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -413,7 +462,9 @@ export const MaterialInReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`MaterialIn #${id} not found`);
-    const details = await prisma.material_in_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.material_in_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };
@@ -449,7 +500,9 @@ export const StockRequestReadService = {
       include: { voucher_headers: true },
     });
     if (!main) throw new NotFoundError(`StockRequest #${id} not found`);
-    const details = await prisma.stock_request_details.findMany({ where: { voucher_id: id } });
+    const details = await attachSkuLabels(
+      await prisma.stock_request_details.findMany({ where: { voucher_id: id } }),
+    );
     return { ...main, details };
   },
 };

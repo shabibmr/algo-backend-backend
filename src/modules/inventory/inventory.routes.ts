@@ -24,6 +24,15 @@ import {
   routeMappingSchema,
   ledgerItemMappingSchema,
 } from './inventory.schema';
+import {
+  productAttributeSchema,
+  updateProductAttributeSchema,
+  productAttributeValueSchema,
+  updateProductAttributeValueSchema,
+  assignItemAttributesSchema,
+  resolveVariantSkuSchema,
+} from './attribute/attribute.schema';
+import { AttributeController } from './attribute/attribute.controller';
 
 const router = Router();
 
@@ -167,6 +176,29 @@ router.put(
   InventoryController.updateSku,
 );
 router.delete('/sku/:id', authorize('Inventory', 'delete'), InventoryController.deleteSku);
+router.post(
+  '/sku/resolve-variant',
+  authorize('Inventory', 'create'),
+  validate(resolveVariantSkuSchema),
+  AttributeController.resolveVariantSku,
+);
+router.get('/item/:id/skus', authorize('Inventory', 'read'), AttributeController.getItemSkus);
+router.get(
+  '/item/:id/attributes',
+  authorize('Inventory', 'read'),
+  AttributeController.getItemAttributes,
+);
+router.post(
+  '/item/:id/attributes',
+  authorize('Inventory', 'update'),
+  validate(assignItemAttributesSchema),
+  AttributeController.assignItemAttributes,
+);
+router.get(
+  '/item/:id/attribute-suggestions',
+  authorize('Inventory', 'read'),
+  AttributeController.getItemAttributeSuggestions,
+);
 
 // ── Item Batch Routes ───────────────────────────────────────
 router.get('/batch', authorize('Inventory', 'read'), InventoryController.listBatches);
@@ -198,6 +230,64 @@ router.delete(
   '/property/:id',
   authorize('Inventory', 'delete'),
   InventoryController.deleteProperty,
+);
+
+// ── Product Attribute Routes ────────────────────────────────
+router.get(
+  '/attribute',
+  authorize('Inventory', 'read'),
+  AttributeController.listProductAttributes,
+);
+router.get(
+  '/attribute/tree',
+  authorize('Inventory', 'read'),
+  AttributeController.listProductAttributeTree,
+);
+router.get(
+  '/attribute/:id',
+  authorize('Inventory', 'read'),
+  AttributeController.getProductAttribute,
+);
+router.post(
+  '/attribute',
+  authorize('Inventory', 'create'),
+  validate(productAttributeSchema),
+  AttributeController.createProductAttribute,
+);
+router.put(
+  '/attribute/:id',
+  authorize('Inventory', 'update'),
+  validate(updateProductAttributeSchema),
+  AttributeController.updateProductAttribute,
+);
+router.delete(
+  '/attribute/:id',
+  authorize('Inventory', 'delete'),
+  AttributeController.deleteProductAttribute,
+);
+
+// ── Product Attribute Values Routes ─────────────────────────
+router.get(
+  '/attribute/:id/values',
+  authorize('Inventory', 'read'),
+  AttributeController.listProductAttributeValues,
+);
+router.post(
+  '/attribute/:id/values',
+  authorize('Inventory', 'create'),
+  validate(productAttributeValueSchema),
+  AttributeController.createProductAttributeValue,
+);
+router.put(
+  '/attribute/values/:valueId',
+  authorize('Inventory', 'update'),
+  validate(updateProductAttributeValueSchema),
+  AttributeController.updateProductAttributeValue,
+);
+router.delete(
+  '/attribute/values/:valueId',
+  authorize('Inventory', 'delete'),
+  AttributeController.deleteProductAttributeValue,
 );
 
 // ── Item Image Routes ───────────────────────────────────────

@@ -473,7 +473,17 @@ export const SKUMasterService = {
     return skuRepo.findMany(options);
   },
   async getSku(id: number) {
-    const sku = await skuRepo.findById(id);
+    const sku = await (prisma as any).sku_master.findUnique({
+      where: { id },
+      include: {
+        sku_attribute_values: {
+          include: {
+            attribute: true,
+            attribute_value_rel: true,
+          },
+        },
+      },
+    });
     if (!sku) throw new NotFoundError('SKU not found');
     return sku;
   },
@@ -494,6 +504,7 @@ export const SKUMasterService = {
     if (!sku) throw new NotFoundError('SKU not found');
     return skuRepo.delete(id, { user, hardDelete: true });
   },
+
 };
 
 // ── ItemBatch Service ────────────────────────────────────────
