@@ -1,0 +1,42 @@
+name: algoerp
+
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docs/db/live_schema.sql:/docker-entrypoint-initdb.d/01_live_schema.sql:ro
+      - ./docs/db/INV-ATTR-001_product_attributes.sql:/docker-entrypoint-initdb.d/02_inv_attr.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 120s
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: ${PORT}
+      DATABASE_URL: mysql://${MARIADB_USER}:${MARIADB_PASSWORD}@db:3306/${MARIADB_DATABASE}
+    ports:
+      - "${PORT}:${PORT}"
+    volumes:
+      - .:/app
+      - api_node_modules:/app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "npx prisma generate && npm run dev"]
+
+volumes:
+  db_data:
+  api_node_modules:

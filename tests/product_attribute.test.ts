@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 import request from 'supertest';
 import app from '../src/app';
 import { prisma } from '../src/core/db/prisma';
@@ -283,9 +284,286 @@ describe('🚀 Product Attributes & Variant SKU Integration Tests', () => {
       .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.length).toBeGreaterThanOrEqual(1);
-    const matched = res.body.data.find((s: any) => s.id === resolvedSkuId);
+    expect(res.body.data.items.length).toBeGreaterThanOrEqual(1);
+    const matched = res.body.data.items.find((s: any) => s.id === resolvedSkuId);
     expect(matched).toBeDefined();
     expect(matched.sku_attribute_values.length).toBe(3);
+  });
+  it('9. Should reject a value longer than 255 characters and create no SKU', async () => {
+    const before = await prisma.sku_master.count({ where: { inventory_item_id: testItemId } });
+    const res = await request(app)
+      .post('/inventory/sku/resolve-variant')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        itemId: testItemId,
+        attributes: [{ attributeId: colorAttrId, value: 'x'.repeat(256) }],
+      });
+    expect(res.status).toBe(400);
+    const after = await prisma.sku_master.count({ where: { inventory_item_id: testItemId } });
+    expect(after).toBe(before);
+  });
+
+  it('10. Should truncate sku_name to 150 and attribute_summary to 500', async () => {
+    const res = await request(app)
+      .post('/inventory/sku/resolve-variant')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        itemId: testItemId,
+        attributes: [
+          { attributeId: sizeAttrId, value: 'L', valueId: sizeLValId },
+          { attributeId: colorAttrId, value: 'c'.repeat(255) },
+          { attributeId: neckAttrId, value: 'n'.repeat(255) },
+        ],
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.data.sku.sku_name.length).toBeLessThanOrEqual(150);
+    expect(res.body.data.sku.attribute_summary.length).toBeLessThanOrEqual(500);
+  });
+
+  const resolve = (itemId: number, attributes: any[]) =>
+    request(app)
+      .post('/inventory/sku/resolve-variant')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ itemId, attributes });
+  const skuCount = (itemId: number) =>
+    prisma.sku_master.count({ where: { inventory_item_id: itemId } });
+
+  it('11. Should reject duplicate attributeIds in one body', async () => {
+    const before = await skuCount(testItemId);
+    const res = await resolve(testItemId, [
+      { attributeId: sizeAttrId, value: 'L', valueId: sizeLValId },
+      { attributeId: sizeAttrId, value: 'M', valueId: sizeMValId },
+    ]);
+    expect(res.status).toBe(400);
+    expect(await skuCount(testItemId)).toBe(before);
+  });
+
+  it('12. Should reject a valueId that belongs to another attribute', async () => {
+    const before = await skuCount(testItemId);
+    const res = await resolve(testItemId, [
+      { attributeId: sizeAttrId, value: 'L', valueId: sizeLValId },
+      { attributeId: colorAttrId, value: 'Red', valueId: sizeMValId },
+    ]);
+    expect(res.status).toBe(400);
+    expect(await skuCount(testItemId)).toBe(before);
+  });
+
+  it('13. Should reject an unknown or unassigned attribute', async () => {
+    const before = await skuCount(testItemId);
+    const unknown = await resolve(testItemId, [
+      { attributeId: sizeAttrId, value: 'L', valueId: sizeLValId },
+      { attributeId: 999999999, value: 'x' },
+    ]);
+    expect(unknown.status).toBe(400);
+
+    const created = await request(app)
+      .post('/inventory/attribute')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ attribute_name: 'Fabric', attribute_type: 'EDITABLE', data_type: 'TEXT' });
+    expect(created.status).toBe(201);
+    createdAttrIds.push(created.body.data.id);
+    const unassigned = await resolve(testItemId, [
+      { attributeId: sizeAttrId, value: 'L', valueId: sizeLValId },
+      { attributeId: created.body.data.id, value: 'Linen' },
+    ]);
+    expect(unassigned.status).toBe(400);
+    expect(await skuCount(testItemId)).toBe(before);
+  });
+
+  it('14. Should require required attributes and allow omitting optional ones', async () => {
+    const before = await skuCount(testItemId);
+    const missing = await resolve(testItemId, [{ attributeId: colorAttrId, value: 'Red' }]);
+    expect(missing.status).toBe(400);
+    expect(await skuCount(testItemId)).toBe(before);
+
+    const ok = await resolve(testItemId, [{ attributeId: sizeAttrId, value: 'M', valueId: sizeMValId }]);
+    expect(ok.status).toBe(200);
+    const again = await resolve(testItemId, [{ attributeId: sizeAttrId, value: 'M', valueId: sizeMValId }]);
+    expect(again.body.data.sku.id).toBe(ok.body.data.sku.id);
+    expect(again.body.data.isNew).toBe(false);
+  });
+
+  it('15. Should require every child of a required GROUP', async () => {
+    const assign = (groupRequired: boolean) =>
+      request(app)
+        .post(`/inventory/item/${testItemId}/attributes`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          attributes: [
+            { attribute_id: sizeAttrId, is_required: true, display_order: 1 },
+            { attribute_id: colorAttrId, is_required: false, display_order: 2 },
+            { attribute_id: groupAttrId, is_required: groupRequired, display_order: 3 },
+          ],
+        });
+    expect((await assign(true)).status).toBe(200);
+    try {
+      const size = { attributeId: sizeAttrId, value: 'M', valueId: sizeMValId };
+      const before = await skuCount(testItemId);
+      expect((await resolve(testItemId, [size])).status).toBe(400);
+      expect((await resolve(testItemId, [size, { attributeId: neckAttrId, value: '15' }])).status).toBe(400);
+      expect(await skuCount(testItemId)).toBe(before);
+      const full = await resolve(testItemId, [
+        size,
+        { attributeId: neckAttrId, value: '15' },
+        { attributeId: chestAttrId, value: '40' },
+      ]);
+      expect(full.status).toBe(200);
+    } finally {
+      expect((await assign(false)).status).toBe(200);
+    }
+  });
+
+  it('16. Should reject variants for an item with no assigned attributes', async () => {
+    const bare = await prisma.sales_inventory_items.create({
+      data: { Item_Name: 'Bare Item', Item_Code: `BARE-${Date.now()}`, Group_Id: 'GRP1', Price: 1, is_active: true },
+    });
+    try {
+      const res = await resolve(bare.id, [{ attributeId: colorAttrId, value: 'Red' }]);
+      expect(res.status).toBe(400);
+      expect(await skuCount(bare.id)).toBe(0);
+    } finally {
+      await prisma.sales_inventory_items.deleteMany({ where: { id: bare.id } });
+    }
+  });
+
+  it('17. Should return the existing SKU when the insert hits the unique hash key', async () => {
+    const attrs = [{ attributeId: sizeAttrId, value: 'L', valueId: sizeLValId }, { attributeId: colorAttrId, value: 'Race Condition' }];
+    const real = prisma.$transaction.bind(prisma);
+    const spy = vi.spyOn(prisma, '$transaction').mockImplementationOnce(async (fn: any) => {
+      // Another request wins: its insert commits, then ours fails on the unique key.
+      await real(fn);
+      throw new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: 'uk_item_attr_hash' },
+      });
+    });
+    try {
+      const res = await resolve(testItemId, attrs);
+      expect(res.status).toBe(200);
+      expect(res.body.data.isNew).toBe(false);
+      expect(res.body.data.sku.id).toBeDefined();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  describe('attribute hierarchy on update and delete', () => {
+    const put = (id: number, body: any) =>
+      request(app).put(`/inventory/attribute/${id}`).set('Authorization', `Bearer ${adminToken}`).send(body);
+    const del = (id: number) =>
+      request(app).delete(`/inventory/attribute/${id}`).set('Authorization', `Bearer ${adminToken}`);
+    const create = async (body: any) => {
+      const r = await request(app)
+        .post('/inventory/attribute')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send(body);
+      expect(r.status).toBe(201);
+      createdAttrIds.push(r.body.data.id);
+      return r.body.data.id as number;
+    };
+
+    it('18. Should reject parent_id alone on a GROUP', async () => {
+      const other = await create({ attribute_name: 'Other Group', attribute_type: 'GROUP' });
+      expect((await put(groupAttrId, { parent_id: other })).status).toBe(400);
+    });
+
+    it('19. Should reject parenting under a child attribute', async () => {
+      const leaf = await create({ attribute_name: 'Loose Leaf', attribute_type: 'EDITABLE' });
+      expect((await put(leaf, { parent_id: neckAttrId })).status).toBe(400);
+    });
+
+    it('20. Should reject turning a group with children into another type', async () => {
+      expect((await put(groupAttrId, { attribute_type: 'EDITABLE' })).status).toBe(400);
+    });
+
+    it('21. Should refuse to delete a group with children and keep everything', async () => {
+      expect((await del(groupAttrId)).status).toBe(409);
+      const ids = [groupAttrId, neckAttrId, chestAttrId];
+      expect(await prisma.product_attributes.count({ where: { id: { in: ids } } })).toBe(3);
+    });
+
+    it('22. Should still delete an unused leaf', async () => {
+      const leaf = await create({ attribute_name: 'Disposable', attribute_type: 'EDITABLE' });
+      expect((await del(leaf)).status).toBe(200);
+    });
+  });
+
+  describe('list, paging, suggestions and assignment writes', () => {
+    it('23. Should include the parent name on child attributes in the list', async () => {
+      const res = await request(app)
+        .get('/inventory/attribute?limit=200')
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      const neck = res.body.data.items.find((a: any) => a.id === neckAttrId);
+      expect(neck.parent_attribute.attribute_name).toBe('Shirt Measurements');
+    });
+
+    it('24. Should page the item SKU list', async () => {
+      const total = await prisma.sku_master.count({ where: { inventory_item_id: testItemId } });
+      expect(total).toBeGreaterThan(1);
+      const res = await request(app)
+        .get(`/inventory/item/${testItemId}/skus?page=1&limit=1`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data.items.length).toBe(1);
+      expect(res.body.data.meta.total).toBe(total);
+    });
+
+    it('25. Should cap suggestions at 50 values per attribute', async () => {
+      // One value per attribute per SKU (uk_sku_attribute), so seed 60 SKUs
+      for (let i = 0; i < 60; i++) {
+        const sku = await prisma.sku_master.create({
+          data: {
+            sku_code: `${itemCode}-BULK${i}`,
+            inventory_item_id: testItemId,
+            ITEM_ID: itemCode,
+            sku_name: `Bulk ${i}`,
+            SKU_TYPE: 1,
+            attribute_hash: `bulk-${itemCode}-${i}`,
+          },
+        });
+        await prisma.sku_attribute_values.create({
+          data: { sku_id: sku.id, attribute_id: colorAttrId, attribute_value: `Bulk ${i}` },
+        });
+      }
+      const res = await request(app)
+        .get(`/inventory/item/${testItemId}/attribute-suggestions`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.data[colorAttrId].length).toBeLessThanOrEqual(50);
+    });
+
+    it('26. Should reject duplicate assignments without wiping existing ones', async () => {
+      const before = await prisma.item_attribute_assignments.count({ where: { item_id: testItemId } });
+      const res = await request(app)
+        .post(`/inventory/item/${testItemId}/attributes`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          attributes: [
+            { attribute_id: sizeAttrId, is_required: true },
+            { attribute_id: sizeAttrId, is_required: false },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(await prisma.item_attribute_assignments.count({ where: { item_id: testItemId } })).toBe(before);
+    });
+
+    it('27. Should replace assignments and keep is_required and display_order', async () => {
+      const res = await request(app)
+        .post(`/inventory/item/${testItemId}/attributes`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          attributes: [
+            { attribute_id: colorAttrId, is_required: false, display_order: 2 },
+            { attribute_id: sizeAttrId, is_required: true, display_order: 1 },
+          ],
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((a: any) => [a.attribute_id, a.is_required, a.display_order])).toEqual([
+        [sizeAttrId, true, 1],
+        [colorAttrId, false, 2],
+      ]);
+    });
   });
 });
