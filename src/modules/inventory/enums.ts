@@ -13,3 +13,11 @@ export const PriceListEntryType = {
 } as const;
 
 export type PriceListEntryType = (typeof PriceListEntryType)[keyof typeof PriceListEntryType];
+
+export const ProductAttributeType = {
+  PREDETERMINED: 'PREDETERMINED',
+  EDITABLE: 'EDITABLE',
+  GROUP: 'GROUP',
+} as const;
+
+export type ProductAttributeType = (typeof ProductAttributeType)[keyof typeof ProductAttributeType];

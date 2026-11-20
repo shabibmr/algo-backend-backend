@@ -2271,6 +2271,7 @@ model sales_inventory_items {
   sku_master                                                                           sku_master[]
   stock_ledger                                                                         stock_ledger[]
   stock_request_details                                                                stock_request_details[]
+  item_attribute_assignments                                                           item_attribute_assignments[]
 
   @@index([Group_Id, Brand_Id], map: "Group_Id")
   @@index([inventory_brand_id], map: "fk_item_brand")
@@ -2671,9 +2672,13 @@ model sku_master {
   SKU_TYPE              Int?
   SKU_POSSIBLE_VALUES   String?                @db.LongText
   SKU_VALUE             String?                @db.VarChar(500)
+  attribute_hash        String?                @db.VarChar(64)
+  attribute_summary     String?                @db.VarChar(500)
   sales_inventory_items sales_inventory_items? @relation(fields: [inventory_item_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_sku_item")
   stock_ledger          stock_ledger[]
+  sku_attribute_values  sku_attribute_values[]
 
+  @@unique([inventory_item_id, attribute_hash], map: "uk_item_attr_hash")
   @@index([inventory_item_id], map: "fk_sku_item")
 }
 
@@ -3916,4 +3921,79 @@ model employeeshiftassignment {
   @@index([employee_id], map: "idx_shiftassign_emp")
   @@index([valid_from, valid_to], map: "idx_shiftassign_dates")
   @@index([shift_id], map: "fk_shiftassign_shift")
+}
+
+enum product_attributes_attribute_type {
+  PREDETERMINED
+  EDITABLE
+  GROUP
+}
+
+model product_attributes {
+  id                               Int                                @id @default(autoincrement())
+  attribute_name                   String                             @db.VarChar(100)
+  attribute_code                   String?                            @unique(map: "uk_attribute_code") @db.VarChar(50)
+  attribute_type                   product_attributes_attribute_type  @default(PREDETERMINED)
+  data_type                        String                             @default("TEXT") @db.VarChar(20)
+  parent_id                        Int?
+  unit                             String?                            @db.VarChar(50)
+  is_active                        Boolean                            @default(true)
+  created_at                       DateTime                           @default(now()) @db.Timestamp(0)
+  updated_at                       DateTime?                          @default(now()) @db.Timestamp(0) @map("updated_at")
+
+  parent_attribute                 product_attributes?                @relation("attribute_hierarchy", fields: [parent_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_attr_parent")
+  sub_attributes                   product_attributes[]               @relation("attribute_hierarchy")
+  values                           product_attribute_values[]
+  item_assignments                 item_attribute_assignments[]
+  sku_attribute_values             sku_attribute_values[]
+
+  @@index([parent_id], map: "fk_attr_parent")
+}
+
+model product_attribute_values {
+  id                               Int                                @id @default(autoincrement())
+  attribute_id                     Int
+  attribute_value                  String                             @db.VarChar(100)
+  value_code                       String?                            @db.VarChar(50)
+  display_order                    Int                                @default(0)
+  is_active                        Boolean                            @default(true)
+  created_at                       DateTime                           @default(now()) @db.Timestamp(0)
+  updated_at                       DateTime?                          @default(now()) @db.Timestamp(0) @map("updated_at")
+
+  attribute                        product_attributes                 @relation(fields: [attribute_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_val_attr")
+  sku_attribute_values             sku_attribute_values[]
+
+  @@index([attribute_id], map: "fk_val_attr")
+}
+
+model item_attribute_assignments {
+  id                               Int                                @id @default(autoincrement())
+  item_id                          Int
+  attribute_id                     Int
+  is_required                      Boolean                            @default(false)
+  display_order                    Int                                @default(0)
+  created_at                       DateTime                           @default(now()) @db.Timestamp(0)
+
+  sales_inventory_items            sales_inventory_items              @relation(fields: [item_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_item_attr_item")
+  attribute                        product_attributes                 @relation(fields: [attribute_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_item_attr_attr")
+
+  @@unique([item_id, attribute_id], map: "uk_item_attribute")
+  @@index([attribute_id], map: "fk_item_attr_attr")
+}
+
+model sku_attribute_values {
+  id                               Int                                @id @default(autoincrement())
+  sku_id                           Int
+  attribute_id                     Int
+  attribute_value_id               Int?
+  attribute_value                  String                             @db.VarChar(255)
+  created_at                       DateTime                           @default(now()) @db.Timestamp(0)
+
+  sku                              sku_master                         @relation(fields: [sku_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "fk_sku_attr_sku")
+  attribute                        product_attributes                 @relation(fields: [attribute_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_sku_attr_attr")
+  attribute_value_rel              product_attribute_values?          @relation(fields: [attribute_value_id], references: [id], onDelete: SetNull, onUpdate: Restrict, map: "fk_sku_attr_val")
+
+  @@unique([sku_id, attribute_id], map: "uk_sku_attribute")
+  @@index([attribute_id], map: "fk_sku_attr_attr")
+  @@index([attribute_value_id], map: "fk_sku_attr_val")
 }
